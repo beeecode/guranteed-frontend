@@ -10,5 +10,5 @@ export const siteNavLinks = [
 export const portalLinks = [
   { label: 'CBT Portal', path: '/cbt' },
   { label: 'Student Login', path: '/student/login' },
-  { label: 'Admin Login', path: '/admin/login' },
+  { label: 'Parent Login', path: '/parent/login' },
 ];

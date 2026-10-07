@@ -45,3 +45,11 @@ export interface MonitorStudent {
   /** Answered-question count keyed by subject index. */
   answers: Record<number, number>;
 }
+
+/** A parent account; each parent login is linked to a single child. */
+export interface Parent {
+  name: string;
+  avatar: string;
+  relationship: string;
+  child: Student;
+}

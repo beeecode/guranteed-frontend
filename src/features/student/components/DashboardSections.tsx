@@ -88,12 +88,12 @@ export function BundleExamCard({ bundle }: { bundle: ExamBundle }) {
   );
 }
 
-export function RecentResults({ results }: { results: RecentResult[] }) {
+export function RecentResults({ results, viewAllHref = '/student/results' }: { results: RecentResult[]; viewAllHref?: string }) {
   return (
     <div className="bg-white p-6" style={{ borderRadius: 24 }}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-playful font-bold text-[#1C0A04]">🏆 Recent Results</h3>
-        <Link href="/student/results" className="text-xs text-[#B22234] font-bold font-playful flex items-center gap-1">View All <ChevronRight className="w-3 h-3" /></Link>
+        <Link href={viewAllHref} className="text-xs text-[#B22234] font-bold font-playful flex items-center gap-1">View All <ChevronRight className="w-3 h-3" /></Link>
       </div>
       <div className="space-y-3">
         {results.map((r, i) => (

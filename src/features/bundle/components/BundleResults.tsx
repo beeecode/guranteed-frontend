@@ -1,22 +1,15 @@
 import Link from 'next/link';
 import { Home } from 'lucide-react';
 import { StudentPageHeader } from '@/components/layout/StudentPageHeader';
-import { bundleScores, teacherRemark } from '@/data/student';
+import { teacherRemark } from '@/data/student';
 import { sum } from '@/lib/format';
 import type { ExamBundle } from '@/types/exam';
-import { getGrade } from '../lib/grades';
-import { SubjectResultsAccordion, type SubjectResult } from './SubjectResultsAccordion';
+import { summarizeBundleResults } from '../lib/results';
+import { SubjectResultsAccordion } from './SubjectResultsAccordion';
 
 /** Results summary for a completed bundle, with per-subject drill-down. */
-export function BundleResults({ bundle }: { bundle: ExamBundle }) {
-  const subjectResults: SubjectResult[] = bundle.subjects.map((s, i) => {
-    const pct = bundleScores[i] ?? 70;
-    return { ...s, pct, ...getGrade(pct) };
-  });
-
-  const avgPct = Math.round(sum(subjectResults, r => r.pct) / subjectResults.length);
-  const overall = getGrade(avgPct);
-  const bestSubject = subjectResults.reduce((best, r) => r.pct > best.pct ? r : best, subjectResults[0]);
+export function BundleResults({ bundle, backHref = '/student/dashboard' }: { bundle: ExamBundle; backHref?: string }) {
+  const { subjectResults, avgPct, overall, bestSubject } = summarizeBundleResults(bundle);
   const totalAnswered = sum(bundle.subjects, s => s.totalQuestions);
 
   const quickStats = [
@@ -30,6 +23,7 @@ export function BundleResults({ bundle }: { bundle: ExamBundle }) {
       <StudentPageHeader
         title={`${bundle.name} — Results`}
         subtitle={`${bundle.class} · ${bundle.session}`}
+        backHref={backHref}
         backLinkClassName="text-sm text-[#7A5C3A] hover:text-[#8B0000] font-medium"
       />
 
@@ -78,7 +72,7 @@ export function BundleResults({ bundle }: { bundle: ExamBundle }) {
           <div className="text-xs text-[#B8967A] mt-2">{teacherRemark.author}</div>
         </div>
 
-        <Link href="/student/dashboard" className="flex items-center justify-center gap-2 py-4 font-playful font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-xl" style={{ background: '#B22234', borderRadius: 999, boxShadow: '0 4px 16px rgba(178,34,52,0.3)' }}>
+        <Link href={backHref} className="flex items-center justify-center gap-2 py-4 font-playful font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-xl" style={{ background: '#B22234', borderRadius: 999, boxShadow: '0 4px 16px rgba(178,34,52,0.3)' }}>
           <Home className="w-4 h-4" /> Return to Dashboard
         </Link>
       </main>

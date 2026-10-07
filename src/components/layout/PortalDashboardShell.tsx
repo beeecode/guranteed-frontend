@@ -4,20 +4,34 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Bell, LogOut, Menu } from 'lucide-react';
 import { Logo } from '@/components/ui/Logo';
-import type { Student } from '@/types/student';
 
-const navItems = [
-  { id: 'dashboard', label: 'Dashboard', emoji: '🏠', path: '/student/dashboard' },
-  { id: 'results', label: 'Results', emoji: '📊', path: '/student/results' },
-  { id: 'performance', label: 'Performance', emoji: '📈', path: '/student/performance' },
-  { id: 'notifications', label: 'Notifications', emoji: '🔔', path: '/student/dashboard' },
-  { id: 'profile', label: 'My Profile', emoji: '👤', path: '/student/dashboard' },
-];
+export interface PortalNavItem {
+  id: string;
+  label: string;
+  emoji: string;
+  path: string;
+}
 
-/** Sidebar + sticky header around the student dashboard content. */
-export function StudentDashboardShell({ student, children }: { student: Student; children: React.ReactNode }) {
+export interface PortalUser {
+  name: string;
+  avatar: string;
+  /** Shown under the name in the sidebar card (e.g. class). */
+  detail: string;
+}
+
+interface PortalDashboardShellProps {
+  portalName: string;
+  title: string;
+  session: string;
+  user: PortalUser;
+  navItems: PortalNavItem[];
+  children: React.ReactNode;
+}
+
+/** Sidebar + sticky header used by the student and parent dashboards. */
+export function PortalDashboardShell({ portalName, title, session, user, navItems, children }: PortalDashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeNav, setActiveNav] = useState('dashboard');
+  const [activeNav, setActiveNav] = useState(navItems[0]?.id);
 
   return (
     <div className="min-h-screen flex" style={{ background: '#F9F5F1' }}>
@@ -27,17 +41,17 @@ export function StudentDashboardShell({ student, children }: { student: Student;
           <Logo className="w-10 h-10 object-contain flex-shrink-0" alt="GFMS" />
           <div>
             <div className="font-playful font-bold text-[#8B0000] text-sm leading-tight">GFMS</div>
-            <div className="text-[#B8967A] text-xs">Student Portal</div>
+            <div className="text-[#B8967A] text-xs">{portalName}</div>
           </div>
         </div>
         <div className="px-4 py-4 mx-3 my-3" style={{ background: 'rgba(178,34,52,0.06)', borderRadius: 16 }}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 flex items-center justify-center font-playful font-bold text-white text-sm flex-shrink-0" style={{ background: '#B22234', borderRadius: 12 }}>
-              {student.avatar}
+              {user.avatar}
             </div>
             <div>
-              <div className="font-playful font-bold text-[#1C0A04] text-sm truncate">{student.name}</div>
-              <div className="text-[#B8967A] text-xs">{student.class}</div>
+              <div className="font-playful font-bold text-[#1C0A04] text-sm truncate">{user.name}</div>
+              <div className="text-[#B8967A] text-xs">{user.detail}</div>
             </div>
           </div>
         </div>
@@ -67,8 +81,8 @@ export function StudentDashboardShell({ student, children }: { student: Student;
               <Menu className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="font-playful font-bold text-[#1C0A04] text-lg">My Dashboard</h1>
-              <p className="text-[#B8967A] text-xs">Session: {student.session}</p>
+              <h1 className="font-playful font-bold text-[#1C0A04] text-lg">{title}</h1>
+              <p className="text-[#B8967A] text-xs">Session: {session}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -77,7 +91,7 @@ export function StudentDashboardShell({ student, children }: { student: Student;
               <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#B22234]" />
             </button>
             <div className="w-9 h-9 flex items-center justify-center font-playful font-bold text-white text-sm" style={{ background: '#B22234', borderRadius: 12 }}>
-              {student.avatar}
+              {user.avatar}
             </div>
           </div>
         </header>

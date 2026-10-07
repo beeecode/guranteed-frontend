@@ -13,14 +13,17 @@ const scoreColor = (score: number) => score >= 80 ? '#16A34A' : score >= 60 ? '#
 interface StudentPerformanceProps {
   subjectScores: { subject: string; score: number }[];
   termScores: { term: string; score: number }[];
+  title?: string;
+  backHref?: string;
 }
 
 /** Performance analytics: overview cards, charts and per-subject progress bars. */
-export function StudentPerformance({ subjectScores, termScores }: StudentPerformanceProps) {
+export function StudentPerformance({ subjectScores, termScores, title = 'My Performance', backHref }: StudentPerformanceProps) {
   return (
     <div className="min-h-screen bg-[#F9F5F1]">
       <SimplePortalHeader
-        title="My Performance"
+        title={title}
+        backHref={backHref}
         maxWidthClassName="max-w-5xl"
         backLinkClassName="flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#8B0000]"
       />

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { MonitorSmartphone, LayoutDashboard, ArrowLeft, Shield, Clock, Zap } from 'lucide-react';
+import { MonitorSmartphone, Users, ArrowLeft, Shield, Clock, Zap } from 'lucide-react';
 import { GoldWave } from '@/components/ui/GoldWave';
 import { Logo } from '@/components/ui/Logo';
 
@@ -66,27 +66,27 @@ export function PortalSelection() {
             </Link>
           </div>
 
-          {/* Admin Portal */}
+          {/* Parent Portal */}
           <div className="p-10 relative" style={{ background: '#FBF8D6', border: '1px solid rgba(28,10,4,0.08)', borderRadius: 4 }}>
             <div className="absolute -top-3 right-8 w-16 h-4" style={{ background: 'rgba(255,255,255,0.88)', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderRadius: 2, transform: 'rotate(1.5deg)' }} />
             <div className="w-12 h-12 flex items-center justify-center mb-6" style={{ border: '1.5px solid rgba(28,10,4,0.2)', borderRadius: 4 }}>
-              <LayoutDashboard className="w-6 h-6" style={{ color: '#7A5C3A' }} />
+              <Users className="w-6 h-6" style={{ color: '#7A5C3A' }} />
             </div>
-            <div className="section-number mb-3">Administration</div>
-            <h2 className="font-display font-bold text-[#1C0A04] text-2xl mb-4">Admin Login</h2>
+            <div className="section-number mb-3">Parent Portal</div>
+            <h2 className="font-display font-bold text-[#1C0A04] text-2xl mb-4">Parent Login</h2>
             <p className="text-[#7A5C3A] text-sm leading-relaxed mb-8">
-              Manage examinations, students, question banks, results and full system settings. Restricted access only.
+              Follow your child's progress. View published results, subject performance and teacher remarks — all in one place.
             </p>
             <div className="space-y-2 mb-10">
-              {['Create & schedule examinations', 'Manage students & classes', 'Publish & analyse results'].map((f, i) => (
+              {["View your child's published results", 'Track subject performance', 'Read teacher remarks'].map((f, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs" style={{ color: '#7A5C3A' }}>
                   <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#B8967A' }} />
                   {f}
                 </div>
               ))}
             </div>
-            <Link href="/admin/login" className="inline-block px-8 py-3.5 text-sm font-semibold transition-all hover:bg-[#5C1010] hover:text-white" style={{ border: '1.5px solid #5C1010', color: '#5C1010', borderRadius: 4 }}>
-              Admin Login →
+            <Link href="/parent/login" className="inline-block px-8 py-3.5 text-sm font-semibold transition-all hover:bg-[#5C1010] hover:text-white" style={{ border: '1.5px solid #5C1010', color: '#5C1010', borderRadius: 4 }}>
+              Parent Login →
             </Link>
           </div>
         </div>

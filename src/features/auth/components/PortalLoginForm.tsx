@@ -10,14 +10,29 @@ const inputStyle = { background: '#fff', border: '2px solid rgba(217,198,178,0.6
 const focusBorder = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = '#B22234');
 const blurBorder = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'rgba(217,198,178,0.6)');
 
-export function StudentLoginForm() {
+export interface PortalLoginFormConfig {
+  idLabel: string;
+  idPlaceholder: string;
+  secretLabel: string;
+  secretPlaceholder: string;
+  /** e.g. 'numeric' for a PIN */
+  secretInputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  forgotLabel: string;
+  rememberLabel: string;
+  submitLabel: string;
+  successPath: string;
+  errorMessage: string;
+}
+
+/** Mock credential form (ID + password/PIN) shared by the student and parent portals. */
+export function PortalLoginForm({ config }: { config: PortalLoginFormConfig }) {
   const router = useRouter();
   const [show, setShow] = useState(false);
   const [form, setForm] = useState({ id: '', password: '' });
   const { loading, error, submit } = useMockLogin({
     isValid: () => Boolean(form.id && form.password),
-    onSuccess: () => router.push('/student/dashboard'),
-    errorMessage: 'Please enter your Student ID and password.',
+    onSuccess: () => router.push(config.successPath),
+    errorMessage: config.errorMessage,
   });
 
   return (
@@ -29,7 +44,7 @@ export function StudentLoginForm() {
       )}
 
       <div>
-        <label className="block text-xs font-bold text-[#7A5C3A] uppercase tracking-widest mb-2">Student ID / Reg. Number</label>
+        <label className="block text-xs font-bold text-[#7A5C3A] uppercase tracking-widest mb-2">{config.idLabel}</label>
         <input
           type="text"
           required
@@ -39,14 +54,14 @@ export function StudentLoginForm() {
           style={inputStyle}
           onFocus={focusBorder}
           onBlur={blurBorder}
-          placeholder="e.g. GFMS/2026/001"
+          placeholder={config.idPlaceholder}
         />
       </div>
 
       <div>
         <div className="flex justify-between mb-2">
-          <label className="text-xs font-bold text-[#7A5C3A] uppercase tracking-widest">Password</label>
-          <a href="#" className="text-xs text-[#B22234] hover:underline font-medium">Forgot Password?</a>
+          <label className="text-xs font-bold text-[#7A5C3A] uppercase tracking-widest">{config.secretLabel}</label>
+          <a href="#" className="text-xs text-[#B22234] hover:underline font-medium">{config.forgotLabel}</a>
         </div>
         <div className="relative">
           <input
@@ -58,7 +73,8 @@ export function StudentLoginForm() {
             style={inputStyle}
             onFocus={focusBorder}
             onBlur={blurBorder}
-            placeholder="Enter your password"
+            placeholder={config.secretPlaceholder}
+            inputMode={config.secretInputMode}
           />
           <button
             type="button"
@@ -72,7 +88,7 @@ export function StudentLoginForm() {
 
       <div className="flex items-center gap-2">
         <input type="checkbox" id="remember" className="w-4 h-4 rounded accent-[#B22234]" />
-        <label htmlFor="remember" className="text-sm text-[#7A5C3A]">Remember me on this device</label>
+        <label htmlFor="remember" className="text-sm text-[#7A5C3A]">{config.rememberLabel}</label>
       </div>
 
       <button
@@ -86,7 +102,7 @@ export function StudentLoginForm() {
             <Spinner />
             Logging in...
           </>
-        ) : 'Login to My Portal 🚀'}
+        ) : config.submitLabel}
       </button>
     </form>
   );

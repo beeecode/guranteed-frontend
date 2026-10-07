@@ -6,12 +6,15 @@ interface StudentPageHeaderProps {
   subtitle: string;
   /** Pages style their "← Dashboard" link slightly differently; kept per page for visual parity. */
   backLinkClassName?: string;
+  /** Dashboard the back link returns to (student or parent portal). */
+  backHref?: string;
 }
 
-/** White sticky header with crest, title and a link back to the student dashboard. */
+/** White sticky header with crest, title and a link back to the portal dashboard. */
 export function StudentPageHeader({
   title,
   subtitle,
+  backHref = '/student/dashboard',
   backLinkClassName = 'text-sm text-[#7A5C3A] hover:text-[#8B0000] transition-colors font-medium',
 }: StudentPageHeaderProps) {
   return (
@@ -24,7 +27,7 @@ export function StudentPageHeader({
             <div className="text-[#B8967A] text-xs">{subtitle}</div>
           </div>
         </div>
-        <Link href="/student/dashboard" className={backLinkClassName}>
+        <Link href={backHref} className={backLinkClassName}>
           ← Dashboard
         </Link>
       </div>

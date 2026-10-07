@@ -5,7 +5,14 @@ import { sum } from '@/lib/format';
 import type { ExamResult } from '@/types/student';
 
 /** Summary tiles plus the list of published exam results. */
-export function StudentResults({ results }: { results: ExamResult[] }) {
+interface StudentResultsProps {
+  results: ExamResult[];
+  title?: string;
+  backHref?: string;
+  performanceHref?: string;
+}
+
+export function StudentResults({ results, title = 'My Results', backHref, performanceHref = '/student/performance' }: StudentResultsProps) {
   const avg = Math.round(sum(results, r => r.score) / results.length);
 
   const summary = [
@@ -17,7 +24,8 @@ export function StudentResults({ results }: { results: ExamResult[] }) {
   return (
     <div className="min-h-screen bg-[#F9F5F1]">
       <SimplePortalHeader
-        title="My Results"
+        title={title}
+        backHref={backHref}
         maxWidthClassName="max-w-4xl"
         backLinkClassName="flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#8B0000] transition-colors"
       />
@@ -73,7 +81,7 @@ export function StudentResults({ results }: { results: ExamResult[] }) {
         </div>
 
         <div className="mt-6 text-center">
-          <Link href="/student/performance" className="inline-flex items-center gap-2 px-6 py-3 bg-[#B22234] hover:bg-[#8B0000] text-white rounded-xl font-medium text-sm transition-all duration-200 shadow-md">
+          <Link href={performanceHref} className="inline-flex items-center gap-2 px-6 py-3 bg-[#B22234] hover:bg-[#8B0000] text-white rounded-xl font-medium text-sm transition-all duration-200 shadow-md">
             View Performance Analytics
           </Link>
         </div>

@@ -6,10 +6,11 @@ interface SimplePortalHeaderProps {
   /** Tailwind max-width class of the inner container. */
   maxWidthClassName: string;
   backLinkClassName: string;
+  backHref?: string;
 }
 
-/** Header used by the student Results and Performance pages. */
-export function SimplePortalHeader({ title, maxWidthClassName, backLinkClassName }: SimplePortalHeaderProps) {
+/** Header used by the Results and Performance pages (student and parent portals). */
+export function SimplePortalHeader({ title, maxWidthClassName, backLinkClassName, backHref = '/student/dashboard' }: SimplePortalHeaderProps) {
   return (
     <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 sticky top-0 z-10">
       <div className={`${maxWidthClassName} mx-auto flex items-center gap-4`}>
@@ -17,7 +18,7 @@ export function SimplePortalHeader({ title, maxWidthClassName, backLinkClassName
           <GraduationCap className="w-5 h-5 text-white" />
         </div>
         <h1 className="font-heading font-700 text-gray-900 text-lg flex-1">{title}</h1>
-        <Link href="/student/dashboard" className={backLinkClassName}>
+        <Link href={backHref} className={backLinkClassName}>
           <ArrowLeft className="w-4 h-4" /> Dashboard
         </Link>
       </div>
