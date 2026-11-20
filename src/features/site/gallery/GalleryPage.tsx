@@ -1,5 +1,5 @@
-import { PageHero } from '../components/PageHero';
-import { GalleryBrowser } from './GalleryBrowser';
+import { PageHero } from "../components/PageHero"
+import { GalleryBrowser } from "./GalleryBrowser"
 
 export function GalleryPage() {
   return (
@@ -14,5 +14,5 @@ export function GalleryPage() {
 
       <GalleryBrowser />
     </>
-  );
+  )
 }

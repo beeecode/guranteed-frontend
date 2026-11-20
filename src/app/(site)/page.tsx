@@ -1,11 +1,11 @@
-import { AchievementsSection } from '@/features/site/home/AchievementsSection';
-import { ActivitiesSection } from '@/features/site/home/ActivitiesSection';
-import { AdmissionsCtaSection } from '@/features/site/home/AdmissionsCtaSection';
-import { CbtCtaSection } from '@/features/site/home/CbtCtaSection';
-import { HeroSection } from '@/features/site/home/HeroSection';
-import { JourneySection } from '@/features/site/home/JourneySection';
-import { SchoolLifeSection } from '@/features/site/home/SchoolLifeSection';
-import { TestimonialsSection } from '@/features/site/home/TestimonialsSection';
+import { AchievementsSection } from "@/features/site/home/AchievementsSection"
+import { ActivitiesSection } from "@/features/site/home/ActivitiesSection"
+import { AdmissionsCtaSection } from "@/features/site/home/AdmissionsCtaSection"
+import { CbtCtaSection } from "@/features/site/home/CbtCtaSection"
+import { HeroSection } from "@/features/site/home/HeroSection"
+import { JourneySection } from "@/features/site/home/JourneySection"
+import { SchoolLifeSection } from "@/features/site/home/SchoolLifeSection"
+import { TestimonialsSection } from "@/features/site/home/TestimonialsSection"
 
 export default function HomePage() {
   return (
@@ -20,5 +20,5 @@ export default function HomePage() {
       <CbtCtaSection />
       <AdmissionsCtaSection />
     </div>
-  );
+  )
 }

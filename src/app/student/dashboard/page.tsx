@@ -1,23 +1,37 @@
-import type { Metadata } from 'next';
-import { PortalDashboardShell } from '@/components/layout/PortalDashboardShell';
-import { getBundle } from '@/data/bundles';
-import { announcements, currentStudent, dashboardStats, recentResults } from '@/data/student';
+import type { Metadata } from "next"
+import { PortalDashboardShell } from "@/components/layout/PortalDashboardShell"
+import { getBundle } from "@/data/bundles"
 import {
-  Announcements, BundleExamCard, DashboardStats, MotivationCard, RecentResults, WelcomeBanner,
-} from '@/features/student/components/DashboardSections';
-import { studentNavItems } from '@/features/student/navItems';
+  announcements,
+  currentStudent,
+  dashboardStats,
+  recentResults,
+} from "@/data/student"
+import {
+  Announcements,
+  BundleExamCard,
+  DashboardStats,
+  MotivationCard,
+  RecentResults,
+  WelcomeBanner,
+} from "@/features/student/components/DashboardSections"
+import { studentNavItems } from "@/features/student/navItems"
 
-export const metadata: Metadata = { title: 'My Dashboard' };
+export const metadata: Metadata = { title: "My Dashboard" }
 
 export default function StudentDashboardPage() {
-  const bundle = getBundle();
+  const bundle = getBundle()
 
   return (
     <PortalDashboardShell
       portalName="Student Portal"
       title="My Dashboard"
       session={currentStudent.session}
-      user={{ name: currentStudent.name, avatar: currentStudent.avatar, detail: currentStudent.class }}
+      user={{
+        name: currentStudent.name,
+        avatar: currentStudent.avatar,
+        detail: currentStudent.class,
+      }}
       navItems={studentNavItems}
     >
       <main className="flex-1 p-4 sm:p-6 lg:p-8">
@@ -38,5 +52,5 @@ export default function StudentDashboardPage() {
         </div>
       </main>
     </PortalDashboardShell>
-  );
+  )
 }

@@ -1,8 +1,8 @@
-import type { Metadata } from 'next';
-import { StudentLogin } from '@/features/auth/components/StudentLogin';
+import type { Metadata } from "next"
+import { StudentLogin } from "@/features/auth/components/StudentLogin"
 
-export const metadata: Metadata = { title: 'Student Login' };
+export const metadata: Metadata = { title: "Student Login" }
 
 export default function StudentLoginPage() {
-  return <StudentLogin />;
+  return <StudentLogin />
 }
