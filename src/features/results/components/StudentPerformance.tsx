@@ -30,8 +30,8 @@ const scoreColor = (score: number) =>
   score >= 80 ? "#16A34A" : score >= 60 ? "#D97706" : "#DC2626"
 
 interface StudentPerformanceProps {
-  subjectScores: { subject: string score: number }[]
-  termScores: { term: string score: number }[]
+  subjectScores: { subject: string; score: number }[]
+  termScores: { term: string; score: number }[]
   title?: string
   backHref?: string
 }

@@ -35,7 +35,7 @@ export function WelcomeBanner({ student }: { student: Student }) {
 export function DashboardStats({
   stats,
 }: {
-  stats: { label: string value: string emoji: string border: string }[]
+  stats: { label: string; value: string; emoji: string; border: string }[]
 }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

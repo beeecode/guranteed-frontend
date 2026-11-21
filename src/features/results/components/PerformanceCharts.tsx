@@ -20,8 +20,8 @@ import {
 } from "@/components/charts/chartTheme"
 
 interface PerformanceChartsProps {
-  subjectScores: { subject: string score: number }[]
-  termScores: { term: string score: number }[]
+  subjectScores: { subject: string; score: number }[]
+  termScores: { term: string; score: number }[]
 }
 export function PerformanceCharts({
   subjectScores,

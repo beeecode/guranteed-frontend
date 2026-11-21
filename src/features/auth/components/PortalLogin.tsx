@@ -27,12 +27,12 @@ function FloatingChip({
 
 export interface PortalLoginCopy {
   portalName: string
-  heroImage: { src: string alt: string }
-  chips: [{ emoji: string text: string }, { emoji: string text: string }]
+  heroImage: { src: string; alt: string }
+  chips: [{ emoji: string; text: string }, { emoji: string; text: string }]
   heroTitle: string
   heroText: string
   safetyNote: string
-  badge: { emoji: string label: string }
+  badge: { emoji: string; label: string }
   heading: string
   intro: string
 }

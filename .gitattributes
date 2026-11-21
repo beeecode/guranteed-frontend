@@ -144,3 +144,7 @@
 *.stl                filter=lfs diff=lfs merge=lfs -text
 *.nc                 filter=lfs diff=lfs merge=lfs -text
 *.mat                filter=lfs diff=lfs merge=lfs -text
+
+# Vercel's source checkout does not hydrate these runtime images from LFS.
+# Store the app logo directly in Git so Next.js receives real PNG bytes.
+src/assets/logo.png -filter -diff -merge binary
