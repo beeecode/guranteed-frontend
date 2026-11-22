@@ -6,6 +6,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/Spinner"
+import { DemoModeNotice } from "@/components/ui/DemoModeNotice"
 import { useMockLogin } from "../hooks/useMockLogin"
 
 const inputStyle = {
@@ -43,8 +44,10 @@ export function PortalLoginForm({ config }: { config: PortalLoginFormConfig }) {
 
   return (
     <form onSubmit={submit} className="space-y-5">
+      <DemoModeNotice compact />
       {error && (
         <div
+          role="alert"
           className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm font-medium"
           style={{ borderRadius: 14 }}
         >
@@ -96,6 +99,7 @@ export function PortalLoginForm({ config }: { config: PortalLoginFormConfig }) {
           />
           <button
             type="button"
+            aria-label={show ? "Hide password" : "Show password"}
             onClick={() => setShow(!show)}
             className="absolute right-4 top-1/2 -translate-y-1/2 text-[#B8967A] hover:text-[#8B0000] transition-colors"
           >
@@ -133,10 +137,10 @@ export function PortalLoginForm({ config }: { config: PortalLoginFormConfig }) {
         {loading ? (
           <>
             <Spinner />
-            Logging in...
+            Opening preview...
           </>
         ) : (
-          config.submitLabel
+          `${config.submitLabel} (Preview)`
         )}
       </button>
     </form>

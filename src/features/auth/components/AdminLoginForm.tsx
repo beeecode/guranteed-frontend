@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/Spinner"
+import { DemoModeNotice } from "@/components/ui/DemoModeNotice"
 import { useMockLogin } from "../hooks/useMockLogin"
 
 export function AdminLoginForm() {
@@ -18,8 +19,12 @@ export function AdminLoginForm() {
 
   return (
     <form onSubmit={submit} className="space-y-5">
+      <DemoModeNotice compact />
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"
+        >
           {error}
         </div>
       )}
@@ -54,6 +59,7 @@ export function AdminLoginForm() {
           />
           <button
             type="button"
+            aria-label={show ? "Hide password" : "Show password"}
             onClick={() => setShow(!show)}
             className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
           >
@@ -83,10 +89,10 @@ export function AdminLoginForm() {
         {loading ? (
           <>
             <Spinner />
-            Signing in...
+            Opening preview...
           </>
         ) : (
-          "Sign In to Admin Portal"
+          "Open Admin Preview"
         )}
       </button>
     </form>

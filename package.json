@@ -9,8 +9,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types src/lib/api/*.test.ts",
     "format": "oxfmt",
-"format:check": "oxfmt --check"
+    "format:check": "oxfmt --check"
   },
   "dependencies": {
     "lucide-react": "^1.49.0",

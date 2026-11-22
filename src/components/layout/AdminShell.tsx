@@ -20,6 +20,7 @@ import {
   Megaphone,
 } from "lucide-react"
 import { adminProfile } from "@/data/admin"
+import { DemoModeNotice } from "@/components/ui/DemoModeNotice"
 
 const navItems = [
   {
@@ -169,7 +170,10 @@ export function AdminShell({ children, title, subtitle }: AdminShellProps) {
         </header>
 
         {}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+          <DemoModeNotice className="mb-5" />
+          {children}
+        </main>
       </div>
     </div>
   )

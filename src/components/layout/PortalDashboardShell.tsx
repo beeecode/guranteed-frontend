@@ -6,6 +6,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { Bell, LogOut, Menu } from "lucide-react"
 import { Logo } from "@/components/ui/Logo"
+import { DemoModeNotice } from "@/components/ui/DemoModeNotice"
 
 export interface PortalNavItem {
   id: string
@@ -163,6 +164,9 @@ export function PortalDashboardShell({
           </div>
         </header>
 
+        <div className="px-4 pt-4 sm:px-6">
+          <DemoModeNotice compact />
+        </div>
         {children}
       </div>
     </div>
