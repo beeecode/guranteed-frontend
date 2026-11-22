@@ -1,16 +1,31 @@
 import { ApiError, normalizeApiError, validateServerBaseUrl } from "../../lib/api/core.ts"
 
 interface BackendRequestOptions { method?: string; body?: unknown; token?: string; signal?: AbortSignal }
-export interface BackendGateway { request<T>(path: string, options?: BackendRequestOptions): Promise<T> }
+interface BackendRawRequestOptions { method?: string; body?: BodyInit; token?: string; signal?: AbortSignal }
+export interface BackendGateway {
+  request<T>(path: string, options?: BackendRequestOptions): Promise<T>
+  requestRaw?(path: string, options?: BackendRawRequestOptions): Promise<Response>
+}
 const parseBody = async (response: Response) => (response.headers.get("content-type") || "").includes("application/json") ? response.json() : null
 
-export function createBackendGateway(baseUrl: string, fetchImpl: typeof fetch = fetch): BackendGateway {
+export function createBackendGateway(baseUrl: string, fetchImpl: typeof fetch = fetch, requestId?: string): BackendGateway {
   const safeBase = validateServerBaseUrl(baseUrl)
+  const headersFor = (token?: string) => {
+    const headers = new Headers({ accept: "application/json", "cache-control": "no-store" })
+    if (requestId) headers.set("x-request-id", requestId)
+    if (token) headers.set("authorization", `Bearer ${token}`)
+    return headers
+  }
+  const safeFailure = async (response: Response) => {
+    const payload = await parseBody(response)
+    const error = normalizeApiError(response.status, payload)
+    Object.assign(error, { requestId: response.headers.get("x-request-id") || requestId })
+    throw error
+  }
   return {
     async request<T>(path: string, options: BackendRequestOptions = {}) {
       if (!path.startsWith("/api/")) throw new Error("BFF backend paths must be explicit API paths")
-      const headers = new Headers({ accept: "application/json", "cache-control": "no-store" })
-      if (options.token) headers.set("authorization", `Bearer ${options.token}`)
+      const headers = headersFor(options.token)
       if (options.body !== undefined) headers.set("content-type", "application/json")
       try {
         const response = await fetchImpl(`${safeBase}${path}`, {
@@ -20,12 +35,33 @@ export function createBackendGateway(baseUrl: string, fetchImpl: typeof fetch = 
           cache: "no-store",
           signal: options.signal ?? AbortSignal.timeout(10_000),
         })
+        if (!response.ok) await safeFailure(response)
         const payload = await parseBody(response)
-        if (!response.ok) throw normalizeApiError(response.status, payload)
         return payload as T
       } catch (error) {
         if (error instanceof ApiError) throw error
-        throw new ApiError("The backend could not be reached.", { status: 503 })
+        const outage = new ApiError("The backend could not be reached.", { status: 503 })
+        Object.assign(outage, { requestId })
+        throw outage
+      }
+    },
+    async requestRaw(path: string, options: BackendRawRequestOptions = {}) {
+      if (!path.startsWith("/api/")) throw new Error("BFF backend paths must be explicit API paths")
+      try {
+        const response = await fetchImpl(`${safeBase}${path}`, {
+          method: options.method || "GET",
+          headers: headersFor(options.token),
+          body: options.body,
+          cache: "no-store",
+          signal: options.signal ?? AbortSignal.timeout(30_000),
+        })
+        if (!response.ok) await safeFailure(response)
+        return response
+      } catch (error) {
+        if (error instanceof ApiError) throw error
+        const outage = new ApiError("The backend could not be reached.", { status: 503 })
+        Object.assign(outage, { requestId })
+        throw outage
       }
     },
   }

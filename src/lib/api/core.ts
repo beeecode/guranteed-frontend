@@ -33,6 +33,7 @@ export class ApiError extends Error {
   readonly status: number
   readonly code?: string
   readonly details?: unknown
+  readonly requestId?: string
 
   constructor(
     message: string,
@@ -40,13 +41,15 @@ export class ApiError extends Error {
       status,
       code,
       details,
-    }: { status: number; code?: string; details?: unknown },
+      requestId,
+    }: { status: number; code?: string; details?: unknown; requestId?: string },
   ) {
     super(message)
     this.name = "ApiError"
     this.status = status
     this.code = code
     this.details = details
+    this.requestId = requestId
   }
 }
 
@@ -58,6 +61,7 @@ export function normalizeApiError(status: number, payload: unknown): ApiError {
           error?: unknown
           code?: unknown
           details?: unknown
+          request_id?: unknown
         }
       : {}
   const backendMessage =
@@ -70,10 +74,11 @@ export function normalizeApiError(status: number, payload: unknown): ApiError {
   const message =
     code === "QUESTION_HISTORY_LOCKED"
       ? "This question is part of an exam attempt and cannot be changed. Create a replacement question for future exams."
-      : (STATUS_MESSAGES[status] ??
-        backendMessage ??
+      : (backendMessage ??
+        STATUS_MESSAGES[status] ??
         "Something went wrong. Please try again.")
-  return new ApiError(message, { status, code, details: body.details })
+  const requestId = typeof body.request_id === "string" ? body.request_id : undefined
+  return new ApiError(message, { status, code, details: body.details, requestId })
 }
 
 export function buildPaginationQuery(

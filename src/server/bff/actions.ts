@@ -24,11 +24,13 @@ export function resolveAction(action: string, input: { params?: Record<string, u
   const p = input.params || {}
   const body = input.payload
   const actions: Record<string, () => ResolvedAction> = {
+    "student-server-time": () => ({ role: "student", method: "GET", path: "/api/student/server-time" }),
     "student-exam-preview": () => ({ role: "student", method: "GET", path: `/api/student/exams/${id(p.examId, "examId")}/preview` }),
     "student-attempt-start": () => ({ role: "student", method: "POST", path: "/api/student/attempts/start", body }),
     "student-attempt-get": () => ({ role: "student", method: "GET", path: `/api/student/attempts/${id(p.attemptId, "attemptId")}` }),
     "student-answers-save": () => ({ role: "student", method: "POST", path: `/api/student/attempts/${id(p.attemptId, "attemptId")}/save-answers`, body }),
     "student-heartbeat": () => ({ role: "student", method: "POST", path: `/api/student/attempts/${id(p.attemptId, "attemptId")}/heartbeat`, body }),
+    "student-security-event": () => ({ role: "student", method: "POST", path: `/api/student/attempts/${id(p.attemptId, "attemptId")}/security-event`, body }),
     "student-attempt-submit": () => ({ role: "student", method: "POST", path: `/api/student/attempts/${id(p.attemptId, "attemptId")}/submit` }),
     "student-attempt-results": () => ({ role: "student", method: "GET", path: `/api/student/attempts/${id(p.attemptId, "attemptId")}/results` }),
     "student-bundles-list": () => ({ role: "student", method: "GET", path: withQuery("/api/student/bundles", p, ["page", "limit"]) }),

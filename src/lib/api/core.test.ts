@@ -20,6 +20,9 @@ test("normalizes authentication, authorization, conflict, rate and outage errors
   )
   assert.equal(normalizeApiError(429, {}).status, 429)
   assert.equal(normalizeApiError(503, {}).status, 503)
+  const traced = normalizeApiError(423, { message: "This exam is paused.", request_id: "trace-123456" })
+  assert.equal(traced.message, "This exam is paused.")
+  assert.equal(traced.requestId, "trace-123456")
 })
 
 test("validates pagination and preserves a stable query", () => {

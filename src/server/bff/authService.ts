@@ -5,7 +5,6 @@ import { createSession, type BffSession, type SessionProfile } from "./session.t
 interface AuthSessionPayload { access_token: string; refresh_token: string; expires_at?: number; expires_in?: number }
 interface AuthPayload { session: AuthSessionPayload; user?: SessionProfile }
 interface ProfilePayload { user: SessionProfile }
-const refreshLocks = new Map<string, Promise<BffSession>>()
 const expiryMs = (session: AuthSessionPayload, now: number) => session.expires_at ? session.expires_at * 1000 : now + (session.expires_in || 3600) * 1000
 
 export function createAuthService(gateway: BackendGateway, now = () => Date.now()) {
@@ -32,15 +31,9 @@ export function createAuthService(gateway: BackendGateway, now = () => Date.now(
       return createSession({ accessToken: payload.session.access_token, refreshToken: payload.session.refresh_token, expiresAt: expiryMs(payload.session, now()), profile: trusted, now: now() })
     },
     async refresh(session: BffSession): Promise<BffSession> {
-      const existing = refreshLocks.get(session.id)
-      if (existing) return existing
-      const pending = (async () => {
-        const payload = await gateway.request<AuthPayload>("/api/auth/refresh", { method: "POST", body: { refresh_token: session.refreshToken } })
-        const trusted = await profile(payload.session.access_token)
-        return { ...session, accessToken: payload.session.access_token, refreshToken: payload.session.refresh_token, accessExpiresAt: expiryMs(payload.session, now()), profile: trusted }
-      })()
-      refreshLocks.set(session.id, pending)
-      try { return await pending } finally { refreshLocks.delete(session.id) }
+      const payload = await gateway.request<AuthPayload>("/api/auth/refresh", { method: "POST", body: { refresh_token: session.refreshToken } })
+      const trusted = await profile(payload.session.access_token)
+      return { ...session, accessToken: payload.session.access_token, refreshToken: payload.session.refresh_token, accessExpiresAt: expiryMs(payload.session, now()), profile: trusted }
     },
     async logout(session: BffSession) {
       await gateway.request("/api/auth/logout", { method: "POST", token: session.accessToken }).catch(() => undefined)

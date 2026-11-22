@@ -9,16 +9,21 @@ import { readBffConfig } from "./config.ts"
 import { assertCsrf, assertSameOrigin } from "./csrf.ts"
 import { loadAdminDashboard, loadStudentDashboard } from "./dashboardService.ts"
 import { validateUpload } from "./filePolicy.ts"
+import { prepareUpload, resolveDownload, safeDownloadHeaders } from "./fileTransport.ts"
 import { parsePublicEnquiry } from "./publicEnquiry.ts"
 import { protectPath } from "./routeProtection.ts"
+import { requestIdFor } from "./requestId.ts"
 import {
   clearSessionCookie,
   createSession,
   openSession,
   sealSession,
   serializeSessionCookie,
+  SessionManager,
+  readSessionCookieProfile,
   type SessionProfile,
 } from "./session.ts"
+import { InMemorySessionStore } from "./sessionStore.ts"
 
 const secret = "stage9-test-secret-that-is-at-least-32-characters"
 const profile = (role: "student" | "admin" = "student"): SessionProfile => ({
@@ -41,8 +46,16 @@ test("integration mode fails closed unless every server-side gate is present", (
     GFMS_INTEGRATION_ENVIRONMENT_ID: "11111111-1111-4111-8111-111111111111",
     GFMS_BACKEND_URL: "http://127.0.0.1:5107",
     GFMS_SESSION_SECRET: secret,
+    GFMS_SESSION_STORE: "memory",
+    GFMS_ALLOW_LOCAL_SESSION_STORE: "true",
   })
   assert.equal(config.mode, "integration")
+  assert.throws(() => readBffConfig({
+    GFMS_BFF_MODE: "integration", GFMS_INTEGRATION_AUTHORIZATION: "ISOLATED_NON_PRODUCTION_SUPABASE",
+    GFMS_INTEGRATION_ENVIRONMENT_ID: "11111111-1111-4111-8111-111111111111",
+    GFMS_BACKEND_URL: "http://127.0.0.1:5107", GFMS_SESSION_SECRET: secret,
+    GFMS_SESSION_STORE: "memory", GFMS_ALLOW_LOCAL_SESSION_STORE: "true", NODE_ENV: "production",
+  }), /memory session store/)
 })
 
 test("encrypted sessions reject tampering and expiry", () => {
@@ -93,6 +106,12 @@ test("login uses the trusted profile and rejects a portal-role mismatch", async 
 test("concurrent refresh calls rotate the token only once per session", async () => {
   let refreshes = 0
   const current = session()
+  const store = new InMemorySessionStore()
+  const firstInstance = new SessionManager(store, secret)
+  const secondInstance = new SessionManager(store, secret)
+  const cookie = await firstInstance.create(current)
+  const firstSnapshot = await firstInstance.readCookie(cookie)
+  const secondSnapshot = await secondInstance.readCookie(cookie)
   const gateway: BackendGateway = {
     async request<T>(path: string) {
       if (path === "/api/auth/refresh") {
@@ -105,10 +124,13 @@ test("concurrent refresh calls rotate the token only once per session", async ()
     },
   }
   const auth = createAuthService(gateway)
-  const [one, two] = await Promise.all([auth.refresh(current), auth.refresh(current)])
+  const [one, two] = await Promise.all([
+    firstInstance.refresh(firstSnapshot!, auth.refresh),
+    secondInstance.refresh(secondSnapshot!, auth.refresh),
+  ])
   assert.equal(refreshes, 1)
-  assert.equal(one.refreshToken, "refresh-two")
-  assert.equal(two.refreshToken, "refresh-two")
+  assert.equal(one.session.refreshToken, "refresh-two")
+  assert.equal(two.session.refreshToken, "refresh-two")
 })
 
 test("route protection is role-aware and unsupported parent routes close in real modes", () => {
@@ -117,8 +139,96 @@ test("route protection is role-aware and unsupported parent routes close in real
   assert.deepEqual(protectPath("/admin/dashboard", "integration", session("student")), { action: "redirect", destination: "/student/dashboard" })
   assert.deepEqual(protectPath("/parent/dashboard", "integration", null), { action: "redirect", destination: "/cbt" })
   assert.equal(protectPath("/admin/dashboard", "integration", session("admin")).action, "allow")
-  assert.deepEqual(protectPath("/student/exam/42", "integration", session("student")), { action: "redirect", destination: "/student/dashboard" })
+  assert.equal(protectPath("/student/exam/42", "integration", session("student")).action, "allow")
+  assert.equal(protectPath("/student/exam/42/instructions", "integration", session("student")).action, "allow")
+  assert.equal(protectPath("/student/exam/42/submitted", "integration", session("student")).action, "allow")
+  assert.deepEqual(protectPath("/student/results", "integration", session("student")), { action: "redirect", destination: "/student/dashboard" })
   assert.deepEqual(protectPath("/admin/questions", "integration", session("admin")), { action: "redirect", destination: "/admin/dashboard" })
+})
+
+test("opaque session cookies do not contain access or refresh tokens", async () => {
+  const manager = new SessionManager(new InMemorySessionStore(), secret)
+  const current = session()
+  const cookie = await manager.create(current)
+  assert.equal(cookie.includes(current.accessToken), false)
+  assert.equal(cookie.includes(current.refreshToken), false)
+  assert.equal(readSessionCookieProfile(cookie, secret)?.role, "student")
+  assert.equal(readSessionCookieProfile(cookie.replace(".student.", ".admin."), secret), null)
+  assert.equal((await manager.readCookie(cookie))?.session.id, current.id)
+  assert.equal(await manager.readCookie(`${cookie}tampered`), null)
+})
+
+test("logout during refresh prevents the rotated session from being committed", async () => {
+  const store = new InMemorySessionStore()
+  const manager = new SessionManager(store, secret)
+  const cookie = await manager.create(session())
+  const snapshot = await manager.readCookie(cookie)
+  assert.ok(snapshot)
+  let release!: () => void
+  const paused = new Promise<void>((resolve) => { release = resolve })
+  const refreshing = manager.refresh(snapshot!, async (current) => {
+    await paused
+    return { ...current, accessToken: "rotated" }
+  })
+  await new Promise((resolve) => setTimeout(resolve, 5))
+  await manager.delete(snapshot!.session.id)
+  release()
+  await assert.rejects(refreshing, (error: unknown) => (error as { code?: string }).code === "SESSION_CHANGED")
+  assert.equal(await manager.readCookie(cookie), null)
+})
+
+test("a failed refresh releases its lease so a later refresh can succeed", async () => {
+  const manager = new SessionManager(new InMemorySessionStore(), secret)
+  const cookie = await manager.create(session())
+  const snapshot = await manager.readCookie(cookie)
+  await assert.rejects(manager.refresh(snapshot!, async () => { throw new Error("provider rejected refresh") }), /provider rejected/)
+  const next = await manager.refresh(snapshot!, async (current) => ({ ...current, accessToken: "recovered" }))
+  assert.equal(next.session.accessToken, "recovered")
+})
+
+test("expired and revoked server-side sessions fail closed", async () => {
+  const store = new InMemorySessionStore()
+  const future = Date.now() + (9 * 60 * 60 * 1000)
+  const manager = new SessionManager(store, secret, () => future)
+  const current = session()
+  const cookie = await manager.create(current)
+  assert.equal(await manager.readCookie(cookie), null)
+  const activeManager = new SessionManager(store, secret)
+  const active = session()
+  const activeCookie = await activeManager.create(active)
+  await activeManager.delete(active.id)
+  assert.equal(await activeManager.readCookie(activeCookie), null)
+})
+
+test("a temporary session-store interruption never falls back to local token state", async () => {
+  const backing = new InMemorySessionStore()
+  let interrupted = true
+  const store = {
+    create: backing.create.bind(backing),
+    read: async (id: string) => { if (interrupted) throw new Error("store interrupted"); return backing.read(id) },
+    acquireRefresh: backing.acquireRefresh.bind(backing),
+    commitRefresh: backing.commitRefresh.bind(backing),
+    releaseRefresh: backing.releaseRefresh.bind(backing),
+    delete: backing.delete.bind(backing),
+  }
+  const manager = new SessionManager(store, secret)
+  const cookie = await manager.create(session())
+  await assert.rejects(manager.readCookie(cookie), /store interrupted/)
+  interrupted = false
+  assert.ok(await manager.readCookie(cookie))
+})
+
+test("request IDs preserve only safe incoming values and reach the backend", async () => {
+  const incoming = "web-request_1234"
+  assert.equal(requestIdFor(new Request("https://portal.test", { headers: { "x-request-id": incoming } })), incoming)
+  assert.notEqual(requestIdFor(new Request("https://portal.test", { headers: { "x-request-id": "bad id value" } })), "bad id value")
+  let propagated = ""
+  const gateway = createBackendGateway("http://127.0.0.1:5107", async (_url, init) => {
+    propagated = new Headers(init?.headers).get("x-request-id") || ""
+    return Response.json({ ok: true }, { headers: { "x-request-id": incoming } })
+  }, incoming)
+  await gateway.request("/api/student/server-time")
+  assert.equal(propagated, incoming)
 })
 
 test("explicit action mappings reject arbitrary paths and preserve approved pagination", () => {
@@ -173,6 +283,28 @@ test("upload preparation enforces filenames, MIME types and size limits", () => 
   assert.throws(() => validateUpload({ name: "../students.csv", type: "text/csv", size: 100 }, "csv"), /filename/)
   assert.throws(() => validateUpload({ name: "payload.exe", type: "application/octet-stream", size: 100 }, "question-image"), /type/)
   assert.throws(() => validateUpload({ name: "large.csv", type: "text/csv", size: 11 * 1024 * 1024 }, "csv"), /size/)
+})
+
+test("multipart transport maps only approved operations and preserves the browser FormData boundary", () => {
+  const data = new FormData()
+  data.set("csv_file", new File(["name,student_id\nAda,S-1"], "students.csv", { type: "text/csv" }))
+  const prepared = prepareUpload("students-csv", data)
+  assert.equal(prepared.path, "/api/admin/students/import-csv")
+  assert.equal(prepared.body, data)
+  assert.throws(() => prepareUpload("unknown", data), /Unknown upload/)
+  assert.throws(() => resolveDownload("exam-results", { examId: "../private" }), /invalid/)
+  assert.equal(resolveDownload("bundle-results", { bundleId: 4 }), "/api/admin/bundles/4/export")
+})
+
+test("download transport streams backend bytes with a safe filename and request ID", async () => {
+  const gateway = createBackendGateway("http://127.0.0.1:5107", async () => new Response("a,b\r\n1,2", {
+    headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": "attachment; filename=results.csv", "x-request-id": "backend-trace-1" },
+  }))
+  const response = await gateway.requestRaw!("/api/admin/exams/1/export-results", { token: "access" })
+  assert.equal(await response.text(), "a,b\r\n1,2")
+  const headers = safeDownloadHeaders(response.headers, "bff-trace-1")
+  assert.equal(headers["content-disposition"], "attachment; filename=results.csv")
+  assert.equal(headers["x-request-id"], "backend-trace-1")
 })
 
 test("dashboard loaders use only the role-specific backend contracts", async () => {
