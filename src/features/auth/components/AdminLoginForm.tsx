@@ -4,22 +4,24 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/Spinner"
-import { DemoModeNotice } from "@/components/ui/DemoModeNotice"
-import { useMockLogin } from "../hooks/useMockLogin"
+import { usePortalLogin } from "../hooks/usePortalLogin"
+import { AuthModeNotice } from "./AuthModeNotice"
 
 export function AdminLoginForm() {
   const router = useRouter()
   const [show, setShow] = useState(false)
   const [form, setForm] = useState({ email: "", password: "" })
-  const { loading, error, submit } = useMockLogin({
-    isValid: () => Boolean(form.email && form.password),
+  const { loading, error, mode, submit } = usePortalLogin({
+    portal: "admin",
+    identifier: form.email,
+    password: form.password,
     onSuccess: () => router.push("/admin/dashboard"),
-    errorMessage: "Please enter your email and password.",
+    validationMessage: "Please enter your email and password.",
   })
 
   return (
     <form onSubmit={submit} className="space-y-5">
-      <DemoModeNotice compact />
+      <AuthModeNotice mode={mode} />
       {error && (
         <div
           role="alert"
@@ -89,10 +91,10 @@ export function AdminLoginForm() {
         {loading ? (
           <>
             <Spinner />
-            Opening preview...
+            {mode === "integration" ? "Signing in…" : "Opening preview…"}
           </>
         ) : (
-          "Open Admin Preview"
+          mode === "integration" ? "Sign in to Admin Portal" : "Open Admin Preview"
         )}
       </button>
     </form>

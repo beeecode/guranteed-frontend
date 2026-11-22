@@ -6,8 +6,8 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/Spinner"
-import { DemoModeNotice } from "@/components/ui/DemoModeNotice"
-import { useMockLogin } from "../hooks/useMockLogin"
+import { usePortalLogin } from "../hooks/usePortalLogin"
+import { AuthModeNotice } from "./AuthModeNotice"
 
 const inputStyle = {
   background: "#fff",
@@ -21,6 +21,7 @@ const blurBorder = (e: React.FocusEvent<HTMLInputElement>) =>
   (e.target.style.borderColor = "rgba(217,198,178,0.6)")
 
 export interface PortalLoginFormConfig {
+  portal?: "student" | "parent"
   idLabel: string
   idPlaceholder: string
   secretLabel: string
@@ -36,15 +37,17 @@ export function PortalLoginForm({ config }: { config: PortalLoginFormConfig }) {
   const router = useRouter()
   const [show, setShow] = useState(false)
   const [form, setForm] = useState({ id: "", password: "" })
-  const { loading, error, submit } = useMockLogin({
-    isValid: () => Boolean(form.id && form.password),
+  const { loading, error, mode, submit } = usePortalLogin({
+    portal: config.portal || "student",
+    identifier: form.id,
+    password: form.password,
     onSuccess: () => router.push(config.successPath),
-    errorMessage: config.errorMessage,
+    validationMessage: config.errorMessage,
   })
 
   return (
     <form onSubmit={submit} className="space-y-5">
-      <DemoModeNotice compact />
+      <AuthModeNotice mode={mode} />
       {error && (
         <div
           role="alert"
@@ -137,10 +140,10 @@ export function PortalLoginForm({ config }: { config: PortalLoginFormConfig }) {
         {loading ? (
           <>
             <Spinner />
-            Opening preview...
+            {mode === "integration" ? "Signing in…" : "Opening preview…"}
           </>
         ) : (
-          `${config.submitLabel} (Preview)`
+          mode === "integration" ? config.submitLabel : `${config.submitLabel} (Preview)`
         )}
       </button>
     </form>

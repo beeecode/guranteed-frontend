@@ -1,9 +1,10 @@
 "use client"
 
-/** Admission enquiry form with a local "Thank You" confirmation. */
+/** Admission enquiry form that confirms only after backend acknowledgement. */
 
 import { useState } from "react"
 import { siteInputStyle, siteLabelClassName } from "../components/formStyles"
+import { usePublicEnquiry } from "../components/usePublicEnquiry"
 
 const classOptions = [
   "Pre-Primary (Nursery)",
@@ -26,11 +27,21 @@ export function AdmissionsForm() {
     class: "",
     message: "",
   })
-  const [submitted, setSubmitted] = useState(false)
+  const { error, isSubmitting, submitted, submit } = usePublicEnquiry("admissions")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSubmitted(true)
+    const guardianContext = `Parent / guardian: ${formData.parent}.`
+    const message = formData.message.trim()
+      ? `${guardianContext}\n\n${formData.message.trim()}`
+      : `${guardianContext}\n\nPlease contact me about this application.`
+    await submit({
+      full_name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      class_interest: formData.class,
+      message,
+    })
   }
 
   return submitted ? (
@@ -144,12 +155,18 @@ export function AdmissionsForm() {
           placeholder="Any questions or special requirements..."
         />
       </div>
+      {error ? (
+        <p role="alert" className="text-sm font-medium text-red-700">
+          {error}
+        </p>
+      ) : null}
       <button
         type="submit"
-        className="px-10 py-4 text-sm font-semibold text-white hover:opacity-90 transition-all"
+        disabled={isSubmitting}
+        className="px-10 py-4 text-sm font-semibold text-white hover:opacity-90 transition-all disabled:cursor-not-allowed disabled:opacity-60"
         style={{ background: "#5C1010", borderRadius: 4 }}
       >
-        Submit Application →
+        {isSubmitting ? "Submitting…" : "Submit Application →"}
       </button>
     </form>
   )
