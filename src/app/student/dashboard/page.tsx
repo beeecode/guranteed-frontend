@@ -16,13 +16,14 @@ import {
   WelcomeBanner,
 } from "@/features/student/components/DashboardSections"
 import { studentNavItems } from "@/features/student/navItems"
+import { DashboardModeBoundary } from "@/features/integration/DashboardModeBoundary"
 
 export const metadata: Metadata = { title: "My Dashboard" }
 
 export default function StudentDashboardPage() {
   const bundle = getBundle()
 
-  return (
+  return <DashboardModeBoundary role="student" preview={(
     <PortalDashboardShell
       portalName="Student Portal"
       title="My Dashboard"
@@ -52,5 +53,5 @@ export default function StudentDashboardPage() {
         </div>
       </main>
     </PortalDashboardShell>
-  )
+  )} />
 }

@@ -22,6 +22,7 @@ const copy: PortalLoginCopy = {
 }
 
 const form: PortalLoginFormConfig = {
+  portal: "parent",
   idLabel: "Child's Student ID",
   idPlaceholder: "e.g. GFMS/2026/001",
   secretLabel: "Parent PIN",

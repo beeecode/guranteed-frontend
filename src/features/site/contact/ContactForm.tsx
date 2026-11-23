@@ -1,24 +1,32 @@
 "use client"
 
-/** Contact form with a local "Message Sent" confirmation. */
+/** Contact form that confirms only after the BFF acknowledges persistence. */
 
 import { useState } from "react"
 import { siteInputStyle, siteLabelClassName } from "../components/formStyles"
+import { usePublicEnquiry } from "../components/usePublicEnquiry"
 export function ContactForm() {
   const [form, setForm] = useState({
     name: "",
     email: "",
+    phone: "",
     subject: "",
     message: "",
   })
-  const [sent, setSent] = useState(false)
+  const { error, isSubmitting, submitted, submit } = usePublicEnquiry("contact")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSent(true)
+    await submit({
+      full_name: form.name,
+      email: form.email,
+      phone: form.phone,
+      subject: form.subject,
+      message: form.message,
+    })
   }
 
-  return sent ? (
+  return submitted ? (
     <div
       className="text-center py-20 bg-white"
       style={{ border: "1px solid rgba(28,10,4,0.08)", borderRadius: 4 }}
@@ -65,6 +73,19 @@ export function ContactForm() {
         </div>
       </div>
       <div>
+        <label className={siteLabelClassName}>Phone Number *</label>
+        <input
+          type="tel"
+          required
+          value={form.phone}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          className="w-full px-4 py-3 text-sm focus:outline-none"
+          style={siteInputStyle}
+          placeholder="+234 801 234 5678"
+          autoComplete="tel"
+        />
+      </div>
+      <div>
         <label className={siteLabelClassName}>Subject *</label>
         <select
           required
@@ -94,12 +115,18 @@ export function ContactForm() {
           placeholder="How can we help you?"
         />
       </div>
+      {error ? (
+        <p role="alert" className="text-sm font-medium text-red-700">
+          {error}
+        </p>
+      ) : null}
       <button
         type="submit"
-        className="px-10 py-4 text-sm font-semibold text-white hover:opacity-90 transition-all"
+        disabled={isSubmitting}
+        className="px-10 py-4 text-sm font-semibold text-white hover:opacity-90 transition-all disabled:cursor-not-allowed disabled:opacity-60"
         style={{ background: "#5C1010", borderRadius: 4 }}
       >
-        Send Message →
+        {isSubmitting ? "Sending…" : "Send Message →"}
       </button>
     </form>
   )

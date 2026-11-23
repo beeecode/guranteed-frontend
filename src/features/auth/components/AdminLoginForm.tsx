@@ -4,22 +4,29 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/Spinner"
-import { useMockLogin } from "../hooks/useMockLogin"
+import { usePortalLogin } from "../hooks/usePortalLogin"
+import { AuthModeNotice } from "./AuthModeNotice"
 
 export function AdminLoginForm() {
   const router = useRouter()
   const [show, setShow] = useState(false)
   const [form, setForm] = useState({ email: "", password: "" })
-  const { loading, error, submit } = useMockLogin({
-    isValid: () => Boolean(form.email && form.password),
+  const { loading, error, mode, submit } = usePortalLogin({
+    portal: "admin",
+    identifier: form.email,
+    password: form.password,
     onSuccess: () => router.push("/admin/dashboard"),
-    errorMessage: "Please enter your email and password.",
+    validationMessage: "Please enter your email and password.",
   })
 
   return (
     <form onSubmit={submit} className="space-y-5">
+      <AuthModeNotice mode={mode} />
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"
+        >
           {error}
         </div>
       )}
@@ -54,6 +61,7 @@ export function AdminLoginForm() {
           />
           <button
             type="button"
+            aria-label={show ? "Hide password" : "Show password"}
             onClick={() => setShow(!show)}
             className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
           >
@@ -83,10 +91,10 @@ export function AdminLoginForm() {
         {loading ? (
           <>
             <Spinner />
-            Signing in...
+            {mode === "integration" ? "Signing in…" : "Opening preview…"}
           </>
         ) : (
-          "Sign In to Admin Portal"
+          mode === "integration" ? "Sign in to Admin Portal" : "Open Admin Preview"
         )}
       </button>
     </form>

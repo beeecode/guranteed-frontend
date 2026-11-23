@@ -6,7 +6,8 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/Spinner"
-import { useMockLogin } from "../hooks/useMockLogin"
+import { usePortalLogin } from "../hooks/usePortalLogin"
+import { AuthModeNotice } from "./AuthModeNotice"
 
 const inputStyle = {
   background: "#fff",
@@ -20,6 +21,7 @@ const blurBorder = (e: React.FocusEvent<HTMLInputElement>) =>
   (e.target.style.borderColor = "rgba(217,198,178,0.6)")
 
 export interface PortalLoginFormConfig {
+  portal?: "student" | "parent"
   idLabel: string
   idPlaceholder: string
   secretLabel: string
@@ -35,16 +37,20 @@ export function PortalLoginForm({ config }: { config: PortalLoginFormConfig }) {
   const router = useRouter()
   const [show, setShow] = useState(false)
   const [form, setForm] = useState({ id: "", password: "" })
-  const { loading, error, submit } = useMockLogin({
-    isValid: () => Boolean(form.id && form.password),
+  const { loading, error, mode, submit } = usePortalLogin({
+    portal: config.portal || "student",
+    identifier: form.id,
+    password: form.password,
     onSuccess: () => router.push(config.successPath),
-    errorMessage: config.errorMessage,
+    validationMessage: config.errorMessage,
   })
 
   return (
     <form onSubmit={submit} className="space-y-5">
+      <AuthModeNotice mode={mode} />
       {error && (
         <div
+          role="alert"
           className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm font-medium"
           style={{ borderRadius: 14 }}
         >
@@ -96,6 +102,7 @@ export function PortalLoginForm({ config }: { config: PortalLoginFormConfig }) {
           />
           <button
             type="button"
+            aria-label={show ? "Hide password" : "Show password"}
             onClick={() => setShow(!show)}
             className="absolute right-4 top-1/2 -translate-y-1/2 text-[#B8967A] hover:text-[#8B0000] transition-colors"
           >
@@ -133,10 +140,10 @@ export function PortalLoginForm({ config }: { config: PortalLoginFormConfig }) {
         {loading ? (
           <>
             <Spinner />
-            Logging in...
+            {mode === "integration" ? "Signing in…" : "Opening preview…"}
           </>
         ) : (
-          config.submitLabel
+          mode === "integration" ? config.submitLabel : `${config.submitLabel} (Preview)`
         )}
       </button>
     </form>
