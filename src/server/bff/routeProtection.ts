@@ -12,7 +12,9 @@ export function protectPath(path: string, mode: BffMode, session: BffSession | n
   if (session.profile.role !== role) return { action: "redirect", destination: `/${session.profile.role}/dashboard` }
   const integratedPage = path === "/student/dashboard"
     || path === "/admin/dashboard"
+    || ["/admin/students", "/admin/questions", "/admin/exams", "/admin/results"].includes(path)
     || /^\/student\/exam\/[A-Za-z0-9-]+(?:\/instructions|\/submitted)?$/.test(path)
+    || /^\/student\/bundle\/[A-Za-z0-9-]+\/(?:overview|exam|results)$/.test(path)
   if (mode === "integration" && !integratedPage) {
     return { action: "redirect", destination: `/${role}/dashboard` }
   }

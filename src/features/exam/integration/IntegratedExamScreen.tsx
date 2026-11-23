@@ -5,12 +5,24 @@ import { useRouter } from "next/navigation"
 import { AlertTriangle, Bookmark, Check, ChevronLeft, ChevronRight, LoaderCircle, Menu, Save, Send, X } from "lucide-react"
 import { ApiError } from "@/lib/api/core"
 import { bffClient } from "@/lib/api/bffClient"
-import { QuestionSaveRevision, secondsUntil, serverOffset, validTiming } from "./runtime"
+import { isRetryableSaveError, QuestionSaveRevision, retryDelayMs, secondsUntil, serverOffset, UnsavedDraftStore, validTiming } from "./runtime"
 import type { AnswerDraft, AttemptPayload, SaveState } from "./types"
 
 type LoadState = { status: "loading" } | { status: "error"; message: string; completed?: boolean } | { status: "ready"; data: AttemptPayload }
 
-export function IntegratedExamScreen({ examId, attemptId }: { examId: string; attemptId?: string }) {
+interface SubmissionStrategy {
+  action: "student-attempt-submit" | "student-bundle-submit-current"
+  params: Record<string, unknown>
+  successPath: (result: unknown) => string
+  reconciledPath: string
+  recoveryPath?: string
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+const browserStorage = () => { try { return typeof window === "undefined" ? null : window.localStorage } catch { return null } }
+const LOCKING_STATUSES = [400, 401, 410, 423]
+
+export function IntegratedExamScreen({ examId, attemptId, submission }: { examId: string; attemptId?: string; submission?: SubmissionStrategy }) {
   const router = useRouter()
   const [state, setState] = useState<LoadState>({ status: "loading" })
   const [current, setCurrent] = useState(0)
@@ -25,9 +37,21 @@ export function IntegratedExamScreen({ examId, attemptId }: { examId: string; at
   const [confirming, setConfirming] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [uncertainSubmit, setUncertainSubmit] = useState(false)
+  const submittedPath = submission?.reconciledPath ?? `/student/exam/${encodeURIComponent(examId)}/submitted?attempt=${encodeURIComponent(attemptId || "")}`
+  const recoveryPath = submission?.recoveryPath ?? `/student/exam/${encodeURIComponent(examId)}/instructions`
   const drafts = useRef<Record<number, AnswerDraft>>({})
   const revisions = useRef(new QuestionSaveRevision())
   const inFlight = useRef(new Set<number>())
+  // Stage 11 (exam-day safety): refs read inside long-running async loops, where React
+  // state would be stale.
+  const mounted = useRef(true)
+  const submittingRef = useRef(false)
+  const expiryHandled = useRef(false)
+  const timingRef = useRef<{ timing: AttemptPayload["timing"] | null; offset: number }>({ timing: null, offset: 0 })
+  const draftStore = useRef<UnsavedDraftStore | null>(null)
+
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  useEffect(() => { timingRef.current = { timing, offset } }, [timing, offset])
 
   const load = useCallback(async (): Promise<LoadState> => {
     if (!attemptId) return { status: "error", message: "No server-issued attempt was supplied." }
@@ -49,39 +73,129 @@ export function IntegratedExamScreen({ examId, attemptId }: { examId: string; at
       setUncertainSubmit(false)
     } catch (error) {
       if (error instanceof ApiError && (error.code === "EXAM_ALREADY_SUBMITTED" || error.status === 410)) {
-        router.replace(`/student/exam/${encodeURIComponent(examId)}/submitted?attempt=${encodeURIComponent(attemptId)}`)
+        draftStore.current?.clear()
+        router.replace(submittedPath)
       } else setNotice(error instanceof Error ? error.message : "The attempt status could not be confirmed.")
     }
-  }, [attemptId, examId, router])
+  }, [attemptId, router, submittedPath])
+
+  // One save loop per question: sends the latest draft, retries transient failures with
+  // backoff until the server acknowledges the newest revision, and keeps the local copy
+  // until then. A stale acknowledgement never marks a newer answer as saved.
+  const saveQuestion = useCallback(async (questionId: number) => {
+    if (!attemptId || inFlight.current.has(questionId)) return
+    inFlight.current.add(questionId)
+    let failures = 0
+    try {
+      while (mounted.current && !revisions.current.isSaved(questionId)) {
+        const revision = revisions.current.latest(questionId)
+        const answer = drafts.current[questionId]
+        setSaveStates((value) => ({ ...value, [questionId]: failures ? "failed" : "saving" }))
+        try {
+          await bffClient.action("student-answers-save", { params: { attemptId }, payload: { answers: [answer] } })
+          failures = 0
+          revisions.current.acknowledge(questionId, revision)
+          const saved = revisions.current.isSaved(questionId)
+          if (saved) draftStore.current?.remove(questionId)
+          setSaveStates((value) => ({ ...value, [questionId]: saved ? "saved" : "unsaved" }))
+        } catch (error) {
+          const status = error instanceof ApiError ? error.status : undefined
+          setSaveStates((value) => ({ ...value, [questionId]: "failed" }))
+          if (!isRetryableSaveError(status)) {
+            if (status !== undefined && LOCKING_STATUSES.includes(status)) {
+              setLocked(true)
+              setNotice(status === 401
+                ? "Your sign-in has expired. Answers not yet saved are kept on this device; sign in again to continue."
+                : error instanceof Error ? error.message : "Saving is no longer possible for this attempt.")
+            }
+            break
+          }
+          failures += 1
+          await sleep(retryDelayMs(failures))
+        }
+      }
+    } finally { inFlight.current.delete(questionId) }
+  }, [attemptId])
 
   useEffect(() => {
-    if (!attemptId) { router.replace(`/student/exam/${encodeURIComponent(examId)}/instructions`); return }
+    if (!attemptId) { router.replace(recoveryPath); return }
+    draftStore.current = new UnsavedDraftStore(attemptId, browserStorage())
     let active = true
     void load().then((next) => {
       if (!active) return
+      let restored: AnswerDraft[] = []
       if (next.status === "ready") {
-        const initial = Object.fromEntries(next.data.answers.map((answer) => [answer.question_id, answer]))
+        const initial: Record<number, AnswerDraft> = Object.fromEntries(next.data.answers.map((answer) => [answer.question_id, answer]))
+        // Answers changed on this device but never acknowledged (crash, reload, expired
+        // sign-in) are restored over the server copy and re-sent.
+        const questionIds = new Set(next.data.questions.map((question) => question.id))
+        restored = Object.values(draftStore.current?.load() ?? {}).filter((draft) => questionIds.has(draft.question_id))
+        for (const draft of restored) { initial[draft.question_id] = draft; revisions.current.change(draft.question_id) }
         drafts.current = initial
         setAnswers(initial)
-        setSaveStates(Object.fromEntries(next.data.questions.map((question) => [question.id, "saved"])))
+        setSaveStates({
+          ...Object.fromEntries(next.data.questions.map((question) => [question.id, "saved" as SaveState])),
+          ...Object.fromEntries(restored.map((draft) => [draft.question_id, "unsaved" as SaveState])),
+        })
         setTiming(next.data.timing)
         setOffset(serverOffset(next.data.serverTime))
-      }
+      } else if (next.status === "error" && next.completed) draftStore.current?.clear()
       setState(next)
+      for (const draft of restored) void saveQuestion(draft.question_id)
     })
     return () => { active = false }
-  }, [attemptId, examId, load, router])
+  }, [attemptId, load, recoveryPath, router, saveQuestion])
+
+  const performSubmit = useCallback(async (automatic: boolean) => {
+    if (!attemptId || submittingRef.current) return
+    submittingRef.current = true
+    setSubmitting(true); setUncertainSubmit(false)
+    if (!automatic) setNotice("")
+    try {
+      // attempt_id lets the server treat a retry of an already-submitted bundle subject
+      // as a no-op instead of submitting the next subject.
+      const result = await bffClient.action<unknown>(submission?.action ?? "student-attempt-submit", {
+        params: submission?.params ?? { attemptId },
+        payload: { attempt_id: Number(attemptId) },
+      })
+      draftStore.current?.clear()
+      router.replace(submission?.successPath(result) ?? submittedPath)
+    } catch (error) {
+      submittingRef.current = false
+      if (error instanceof ApiError && (error.code === "EXAM_ALREADY_SUBMITTED" || error.status === 410)) { draftStore.current?.clear(); router.replace(submittedPath); return }
+      if (error instanceof ApiError && error.status === 503) { setNotice("Submission could not be confirmed. It was not replayed automatically."); setUncertainSubmit(true) }
+      else setNotice(error instanceof Error ? error.message : "Submission could not be confirmed.")
+      setSubmitting(false); setConfirming(false)
+      if (automatic) void reconcileAttempt()
+    }
+  }, [attemptId, reconcileAttempt, router, submission, submittedPath])
+
+  // Time-out: stop new edits, let outstanding saves finish (they keep retrying, and the
+  // server accepts saves during its grace window), then submit. Previously the page only
+  // locked, leaving the student on a frozen screen until the grace period ended.
+  const finishAtExpiry = useCallback(async () => {
+    if (expiryHandled.current) return
+    expiryHandled.current = true
+    setNotice("Time is up. Saving your last answers and submitting…")
+    const deadline = () => {
+      const { timing: current, offset: skew } = timingRef.current
+      return current ? current.saveGraceEndsAt - skew - 5_000 : Date.now()
+    }
+    const pending = () => Object.keys(drafts.current).some((id) => !revisions.current.isSaved(Number(id)))
+    while (mounted.current && pending() && inFlight.current.size > 0 && Date.now() < deadline()) await sleep(500)
+    if (mounted.current) await performSubmit(true)
+  }, [performSubmit])
 
   useEffect(() => {
     if (!timing || locked) return
     const update = () => {
       const remaining = secondsUntil(timing.expiresAt, offset)
       setSeconds(remaining)
-      if (remaining === 0) { setLocked(true); setNotice("Time has ended. The server is confirming the final attempt state; this page has not assumed submission."); void reconcileAttempt() }
+      if (remaining === 0) { setLocked(true); void finishAtExpiry() }
     }
     update(); const interval = window.setInterval(update, 1000)
     return () => window.clearInterval(interval)
-  }, [timing, offset, locked, reconcileAttempt])
+  }, [timing, offset, locked, finishAtExpiry])
 
   useEffect(() => {
     if (!attemptId || state.status !== "ready" || locked) return
@@ -93,7 +207,7 @@ export function IntegratedExamScreen({ examId, attemptId }: { examId: string; at
         const result = await bffClient.action<{ serverTime: string; timing: AttemptPayload["timing"] }>("student-heartbeat", { params: { attemptId } })
         if (active && validTiming(result.timing)) { setTiming(result.timing); setOffset(serverOffset(result.serverTime)) }
       } catch (error) {
-        if (active && error instanceof ApiError && [400, 401, 410, 423].includes(error.status)) { setLocked(true); setNotice(error.message) }
+        if (active && error instanceof ApiError && LOCKING_STATUSES.includes(error.status)) { setLocked(true); setNotice(error.message) }
       } finally { busy = false }
     }
     const interval = window.setInterval(() => { void beat() }, 15_000)
@@ -107,32 +221,12 @@ export function IntegratedExamScreen({ examId, attemptId }: { examId: string; at
     return () => document.removeEventListener("visibilitychange", visibility)
   }, [attemptId, state.status])
 
-  const saveQuestion = useCallback(async (questionId: number) => {
-    if (!attemptId || inFlight.current.has(questionId)) return
-    inFlight.current.add(questionId)
-    try {
-      while (!revisions.current.isSaved(questionId)) {
-        const revision = revisions.current.latest(questionId)
-        const answer = drafts.current[questionId]
-        setSaveStates((value) => ({ ...value, [questionId]: "saving" }))
-        try {
-          await bffClient.action("student-answers-save", { params: { attemptId }, payload: { answers: [answer] } })
-          revisions.current.acknowledge(questionId, revision)
-          setSaveStates((value) => ({ ...value, [questionId]: revisions.current.isSaved(questionId) ? "saved" : "unsaved" }))
-        } catch (error) {
-          setSaveStates((value) => ({ ...value, [questionId]: "failed" }))
-          if (error instanceof ApiError && [400, 401, 410, 423].includes(error.status)) { setLocked(true); setNotice(error.message) }
-          break
-        }
-      }
-    } finally { inFlight.current.delete(questionId) }
-  }, [attemptId])
-
   const change = (questionId: number, update: Partial<AnswerDraft>) => {
     if (locked) return
     const previous = drafts.current[questionId] ?? { question_id: questionId, selected_option_id: null, answer_text: null, is_marked_for_review: false }
     const next = { ...previous, ...update }
     drafts.current = { ...drafts.current, [questionId]: next }
+    draftStore.current?.put(next)
     setAnswers(drafts.current)
     revisions.current.change(questionId)
     setSaveStates((value) => ({ ...value, [questionId]: "unsaved" }))
@@ -140,22 +234,13 @@ export function IntegratedExamScreen({ examId, attemptId }: { examId: string; at
   }
 
   const submit = async () => {
-    if (!attemptId) return
+    if (!attemptId || submittingRef.current) return
     if (Object.values(saveStates).some((value) => value !== "saved")) { setNotice("Wait for every answer to show Saved, or retry any failed save, before submitting."); setConfirming(false); return }
-    setSubmitting(true); setNotice(""); setUncertainSubmit(false)
-    try {
-      await bffClient.action("student-attempt-submit", { params: { attemptId } })
-      router.replace(`/student/exam/${encodeURIComponent(examId)}/submitted?attempt=${encodeURIComponent(attemptId)}`)
-    } catch (error) {
-      if (error instanceof ApiError && error.code === "EXAM_ALREADY_SUBMITTED") router.replace(`/student/exam/${encodeURIComponent(examId)}/submitted?attempt=${encodeURIComponent(attemptId)}`)
-      else if (error instanceof ApiError && error.status === 503) { setNotice("Submission could not be confirmed. It was not replayed automatically."); setUncertainSubmit(true) }
-      else setNotice(error instanceof Error ? error.message : "Submission could not be confirmed.")
-      setSubmitting(false); setConfirming(false)
-    }
+    await performSubmit(false)
   }
 
   if (state.status === "loading") return <ExamStatus title="Loading secure attempt" message="Restoring server-saved answers and authoritative timing…" loading />
-  if (state.status === "error") return <ExamStatus title={state.completed ? "Attempt no longer active" : "Attempt unavailable"} message={state.message} action={state.completed && attemptId ? () => router.replace(`/student/exam/${encodeURIComponent(examId)}/submitted?attempt=${encodeURIComponent(attemptId)}`) : () => { setState({ status: "loading" }); void load().then(setState) }} actionLabel={state.completed ? "Check result status" : "Try again"} />
+  if (state.status === "error") return <ExamStatus title={state.completed ? "Attempt no longer active" : "Attempt unavailable"} message={state.message} action={state.completed ? () => router.replace(submittedPath) : () => { setState({ status: "loading" }); void load().then(setState) }} actionLabel={state.completed ? "Check progress" : "Try again"} />
   const { questions, attempt, passages } = state.data
   const question = questions[current]
   if (!question) return <ExamStatus title="No questions available" message="The server did not return a question set for this attempt." />

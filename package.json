@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types src/lib/api/*.test.ts src/server/bff/*.test.ts src/features/exam/integration/*.test.ts",
+    "test:session-store": "node --test --experimental-strip-types --test-isolation=none src/server/bff/redisSession.integration.ts",
     "format": "oxfmt",
     "format:check": "oxfmt --check"
   },
@@ -18,9 +19,11 @@
     "next": "^16.3.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "redis": "^6.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

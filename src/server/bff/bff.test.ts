@@ -6,6 +6,7 @@ import { resolveAction } from "./actions.ts"
 import { createAuthService } from "./authService.ts"
 import { createBackendGateway, type BackendGateway } from "./backend.ts"
 import { readBffConfig } from "./config.ts"
+import { forwardWithSession } from "./forwardWithSession.ts"
 import { assertCsrf, assertSameOrigin } from "./csrf.ts"
 import { loadAdminDashboard, loadStudentDashboard } from "./dashboardService.ts"
 import { validateUpload } from "./filePolicy.ts"
@@ -34,8 +35,10 @@ const session = (role: "student" | "admin" = "student") => createSession({
 })
 
 test("integration mode fails closed unless every server-side gate is present", () => {
+  assert.equal(readBffConfig({}).mode, "disabled")
   assert.equal(readBffConfig({ GFMS_BFF_MODE: "mock" }).mode, "mock")
   assert.throws(() => readBffConfig({ GFMS_BFF_MODE: "integration" }), /authorization/)
+  assert.throws(() => readBffConfig({ GFMS_BFF_MODE: "integration", GFMS_INTEGRATION_AUTHORIZATION: "ISOLATED_NON_PRODUCTION_SUPABASE", GFMS_INTEGRATION_ENVIRONMENT_ID: "11111111-1111-4111-8111-111111111111", GFMS_BACKEND_URL: "http://127.0.0.1:5107", GFMS_SESSION_SECRET: secret, GFMS_SESSION_STORE: "external" }), /GFMS_REDIS_URL/)
   assert.throws(() => readBffConfig({
     GFMS_BFF_MODE: "integration",
     GFMS_INTEGRATION_AUTHORIZATION: "ISOLATED_NON_PRODUCTION_SUPABASE",
@@ -143,7 +146,8 @@ test("route protection is role-aware and unsupported parent routes close in real
   assert.equal(protectPath("/student/exam/42/instructions", "integration", session("student")).action, "allow")
   assert.equal(protectPath("/student/exam/42/submitted", "integration", session("student")).action, "allow")
   assert.deepEqual(protectPath("/student/results", "integration", session("student")), { action: "redirect", destination: "/student/dashboard" })
-  assert.deepEqual(protectPath("/admin/questions", "integration", session("admin")), { action: "redirect", destination: "/admin/dashboard" })
+  assert.equal(protectPath("/admin/questions", "integration", session("admin")).action, "allow")
+  assert.deepEqual(protectPath("/admin/settings", "integration", session("admin")), { action: "redirect", destination: "/admin/dashboard" })
 })
 
 test("opaque session cookies do not contain access or refresh tokens", async () => {
@@ -335,4 +339,64 @@ test("public enquiry validation forwards only the approved contract", () => {
     message: "Please send admission information.", class_interest: "Primary 5",
   })
   assert.throws(() => parsePublicEnquiry({}, "contact"), /required enquiry fields/)
+})
+
+// Stage 11: long exams must not lock when the one-hour access token expires.
+test("forwarding refreshes a nearly expired access token once, even for parallel saves", async () => {
+  let refreshes = 0
+  const store = new InMemorySessionStore()
+  const manager = new SessionManager(store, secret)
+  const expiring = createSession({ accessToken: "old-access", refreshToken: "refresh-one", expiresAt: Date.now() + 30_000, profile: profile("student") })
+  const snapshot = (await manager.readCookie(await manager.create(expiring)))!
+  const gateway: BackendGateway = {
+    async request<T>(path: string) {
+      if (path === "/api/auth/refresh") { refreshes += 1; await new Promise((resolve) => setTimeout(resolve, 20)); return { session: { access_token: "new-access", refresh_token: "refresh-two", expires_in: 3600 } } as T }
+      if (path === "/api/me") return { user: profile("student") } as T
+      throw new Error(`unexpected ${path}`)
+    },
+  }
+  const used: string[] = []
+  const results = await Promise.all(Array.from({ length: 20 }, () => forwardWithSession({ gateway, manager, snapshot, session: snapshot.session }, async (token) => { used.push(token); return token })))
+  assert.equal(refreshes, 1, "twenty parallel requests share one refresh")
+  assert.ok(results.every((token) => token === "new-access"))
+  assert.ok(!used.includes("old-access"))
+})
+
+test("forwarding retries once with a refreshed token after a 401, and does not loop", async () => {
+  const store = new InMemorySessionStore()
+  const manager = new SessionManager(store, secret)
+  const fresh = createSession({ accessToken: "revoked-access", refreshToken: "refresh-one", expiresAt: Date.now() + 3_600_000, profile: profile("student") })
+  const snapshot = (await manager.readCookie(await manager.create(fresh)))!
+  let refreshes = 0
+  const gateway: BackendGateway = {
+    async request<T>(path: string) {
+      if (path === "/api/auth/refresh") { refreshes += 1; return { session: { access_token: `access-${refreshes}`, refresh_token: `refresh-${refreshes + 1}`, expires_in: 3600 } } as T }
+      if (path === "/api/me") return { user: profile("student") } as T
+      throw new Error(`unexpected ${path}`)
+    },
+  }
+  const freshSnapshot = async () => (await manager.readCookie(await manager.create({ ...fresh, id: crypto.randomUUID() })))!
+  const calls: string[] = []
+  const result = await forwardWithSession({ gateway, manager, snapshot, session: snapshot.session }, async (token) => {
+    calls.push(token)
+    if (token === "revoked-access") throw new ApiError("Invalid or expired token", { status: 401 })
+    return "saved"
+  })
+  assert.equal(result, "saved")
+  assert.deepEqual(calls, ["revoked-access", "access-1"])
+
+  const alwaysDenied = forwardWithSession({ gateway, manager, snapshot: await freshSnapshot(), session: fresh }, async () => { throw new ApiError("Invalid or expired token", { status: 401 }) })
+  await assert.rejects(alwaysDenied, (error: unknown) => error instanceof ApiError && error.status === 401)
+  // Other failures are not retried by the forwarding layer.
+  let attempts = 0
+  await assert.rejects(forwardWithSession({ gateway, manager, snapshot: await freshSnapshot(), session: fresh }, async () => { attempts += 1; throw new ApiError("Conflict", { status: 409 }) }))
+  assert.equal(attempts, 1)
+})
+
+test("bundle subject submit forwards only a valid attempt_id", () => {
+  assert.deepEqual(resolveAction("student-bundle-submit-current", { params: { sessionAttemptId: 88 }, payload: { attempt_id: 345 } }).body, { attempt_id: 345 })
+  for (const payload of [undefined, {}, { attempt_id: "x" }, { attempt_id: -1 }, { attempt_id: 1.5 }, { attempt_id: 345, extra: "dropped" }]) {
+    const body = resolveAction("student-bundle-submit-current", { params: { sessionAttemptId: 88 }, payload }).body
+    assert.ok(body === undefined || (Object.keys(body as object).length === 1 && (body as { attempt_id: number }).attempt_id === 345), JSON.stringify(payload))
+  }
 })

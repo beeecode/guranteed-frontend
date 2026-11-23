@@ -1,13 +1,15 @@
 import { validateServerBaseUrl } from "../../lib/api/core.ts"
 
 export type BffMode = "mock" | "disabled" | "integration"
-export interface BffConfig { mode: BffMode; backendUrl?: string; sessionSecret?: string; secureCookies: boolean; environmentId?: string; sessionStore?: "memory" | "external" }
+export interface BffConfig { mode: BffMode; backendUrl?: string; sessionSecret?: string; secureCookies: boolean; environmentId?: string; sessionStore?: "memory" | "external"; redisUrl?: string; redisPrefix?: string }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const AUTHORIZATION = "ISOLATED_NON_PRODUCTION_SUPABASE"
 
 export function readBffConfig(env: Record<string, string | undefined> = process.env): BffConfig {
-  const mode = String(env.GFMS_BFF_MODE || "mock").toLowerCase()
+  // Missing configuration must never turn authentication into a preview login.
+  // Mock mode remains available, but only when a developer selects it explicitly.
+  const mode = String(env.GFMS_BFF_MODE || "disabled").toLowerCase()
   if (mode === "mock" || mode === "disabled") return { mode, secureCookies: env.NODE_ENV === "production" }
   if (mode !== "integration") throw new Error("GFMS_BFF_MODE must be mock, disabled or integration")
   if (env.GFMS_INTEGRATION_AUTHORIZATION !== AUTHORIZATION) throw new Error("Integration mode requires the isolated-environment authorization declaration")
@@ -17,6 +19,7 @@ export function readBffConfig(env: Record<string, string | undefined> = process.
   const sessionStore = String(env.GFMS_SESSION_STORE || "").toLowerCase()
   if (sessionStore !== "memory" && sessionStore !== "external") throw new Error("Integration mode requires an explicit shared session-store selection")
   if (sessionStore === "memory" && (env.NODE_ENV === "production" || env.GFMS_ALLOW_LOCAL_SESSION_STORE !== "true")) throw new Error("The memory session store is permitted only for explicit local integration testing")
+  if (sessionStore === "external" && !env.GFMS_REDIS_URL) throw new Error("The external session store requires GFMS_REDIS_URL")
   const backendUrl = validateServerBaseUrl(env.GFMS_BACKEND_URL)
   return {
     mode: "integration",
@@ -25,5 +28,7 @@ export function readBffConfig(env: Record<string, string | undefined> = process.
     environmentId: env.GFMS_INTEGRATION_ENVIRONMENT_ID,
     secureCookies: new URL(backendUrl).protocol === "https:" || env.NODE_ENV === "production",
     sessionStore,
+    redisUrl: env.GFMS_REDIS_URL,
+    redisPrefix: env.GFMS_REDIS_PREFIX || "gfms:session:",
   }
 }
