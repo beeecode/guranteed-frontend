@@ -1,22 +1,17 @@
 import type { Metadata } from "next"
 import { AdminShell } from "@/components/layout/AdminShell"
-import { getBundle, mockMonitorStudents } from "@/data/bundles"
-import { BundleMonitor } from "@/features/admin/components/BundleMonitor"
+import { AdminModeBoundary } from "@/features/admin/integration/AdminModeBoundary"
+import { PreviewDataRemoved } from "@/features/admin/integration/PreviewDataRemoved"
+import { LiveBundleMonitor } from "@/features/admin/live/LiveBundleMonitor"
 
 export const metadata: Metadata = { title: "Live Exam Monitor" }
 
-export default async function BundleMonitorPage({
-  params,
-}: PageProps<"/admin/bundles/[bundleId]/monitor">) {
+export default async function BundleMonitorPage({ params }: PageProps<"/admin/bundles/[bundleId]/monitor">) {
   const { bundleId } = await params
-  const bundle = getBundle(bundleId)
-
   return (
-    <AdminShell
-      title="Live Exam Monitor"
-      subtitle={`${bundle.name} · ${bundle.class}`}
-    >
-      <BundleMonitor bundle={bundle} students={mockMonitorStudents} />
-    </AdminShell>
+    <AdminModeBoundary
+      preview={<AdminShell title="Live Exam Monitor"><PreviewDataRemoved feature="The live monitor" /></AdminShell>}
+      integrated={<AdminShell title="Live Exam Monitor" subtitle="Refreshes every 10 seconds"><LiveBundleMonitor bundleId={bundleId} /></AdminShell>}
+    />
   )
 }

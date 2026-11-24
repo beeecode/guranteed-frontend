@@ -6,6 +6,7 @@ import { resolveAction } from "./actions.ts"
 import { createAuthService } from "./authService.ts"
 import { createBackendGateway, type BackendGateway } from "./backend.ts"
 import { readBffConfig } from "./config.ts"
+import { visitorAddress } from "./http.ts"
 import { forwardWithSession } from "./forwardWithSession.ts"
 import { assertCsrf, assertSameOrigin } from "./csrf.ts"
 import { loadAdminDashboard, loadStudentDashboard } from "./dashboardService.ts"
@@ -141,6 +142,9 @@ test("route protection is role-aware and unsupported parent routes close in real
   assert.deepEqual(protectPath("/student/dashboard", "disabled", null), { action: "redirect", destination: "/student/login" })
   assert.deepEqual(protectPath("/admin/dashboard", "integration", session("student")), { action: "redirect", destination: "/student/dashboard" })
   assert.deepEqual(protectPath("/parent/dashboard", "integration", null), { action: "redirect", destination: "/cbt" })
+  // Stage 11: parent portal postponed; closed in mock mode too.
+  assert.deepEqual(protectPath("/parent/login", "mock", null), { action: "redirect", destination: "/cbt" })
+  assert.deepEqual(protectPath("/parent/dashboard", "mock", null), { action: "redirect", destination: "/cbt" })
   assert.equal(protectPath("/admin/dashboard", "integration", session("admin")).action, "allow")
   assert.equal(protectPath("/student/exam/42", "integration", session("student")).action, "allow")
   assert.equal(protectPath("/student/exam/42/instructions", "integration", session("student")).action, "allow")
@@ -286,7 +290,16 @@ test("upload preparation enforces filenames, MIME types and size limits", () => 
   assert.doesNotThrow(() => validateUpload({ name: "students.csv", type: "text/csv", size: 100 }, "csv"))
   assert.throws(() => validateUpload({ name: "../students.csv", type: "text/csv", size: 100 }, "csv"), /filename/)
   assert.throws(() => validateUpload({ name: "payload.exe", type: "application/octet-stream", size: 100 }, "question-image"), /type/)
-  assert.throws(() => validateUpload({ name: "large.csv", type: "text/csv", size: 11 * 1024 * 1024 }, "csv"), /size/)
+  assert.throws(() => validateUpload({ name: "large.csv", type: "text/csv", size: 11 * 1024 * 1024 }, "csv"), /10 MB/)
+  // Stage 11: question imports accept CSV or ZIP (CSV + images); Windows may send no MIME type.
+  assert.doesNotThrow(() => validateUpload({ name: "maths.zip", type: "application/x-zip-compressed", size: 100 }, "question-import"))
+  assert.doesNotThrow(() => validateUpload({ name: "maths.csv", type: "", size: 100 }, "question-import"))
+  assert.doesNotThrow(() => validateUpload({ name: "students.csv", type: "", size: 100 }, "csv"))
+  assert.doesNotThrow(() => validateUpload({ name: "maths.csv", type: "application/octet-stream", size: 100 }, "question-import"))
+  assert.throws(() => validateUpload({ name: "photo.png", type: "application/octet-stream", size: 100 }, "question-image"), /type/)
+  assert.throws(() => validateUpload({ name: "maths.zip", type: "application/zip", size: 100 }, "csv"), /type/)
+  assert.throws(() => validateUpload({ name: "maths.docx", type: "", size: 100 }, "question-import"), /type/)
+  assert.throws(() => validateUpload({ name: "photo.png", type: "", size: 100 }, "question-image"), /type/)
 })
 
 test("multipart transport maps only approved operations and preserves the browser FormData boundary", () => {
@@ -399,4 +412,18 @@ test("bundle subject submit forwards only a valid attempt_id", () => {
     const body = resolveAction("student-bundle-submit-current", { params: { sessionAttemptId: 88 }, payload }).body
     assert.ok(body === undefined || (Object.keys(body as object).length === 1 && (body as { attempt_id: number }).attempt_id === 345), JSON.stringify(payload))
   }
+})
+
+// Stage 11: per-visitor limits behind the BFF.
+test("the backend gateway forwards the visitor address only together with the shared secret", async () => {
+  const seen: Headers[] = []
+  const fakeFetch = (async (_url: string, init?: RequestInit) => { seen.push(new Headers(init?.headers)); return new Response("{}", { status: 200, headers: { "content-type": "application/json" } }) }) as typeof fetch
+  await createBackendGateway("http://127.0.0.1:5107", fakeFetch, "req-1", { address: "41.1.2.3", sharedSecret: "s".repeat(40) }).request("/api/health")
+  assert.equal(seen[0].get("x-bff-client-ip"), "41.1.2.3")
+  assert.equal(seen[0].get("x-bff-secret"), "s".repeat(40))
+  await createBackendGateway("http://127.0.0.1:5107", fakeFetch, "req-2", { address: "41.1.2.3" }).request("/api/health")
+  assert.equal(seen[1].get("x-bff-client-ip"), null, "no secret: no forwarded address")
+  assert.equal(visitorAddress(new Request("http://x", { headers: { "x-forwarded-for": "41.9.9.9, 10.0.0.1" } })), "41.9.9.9")
+  assert.equal(visitorAddress(new Request("http://x", { headers: { "x-forwarded-for": "evil<script>" } })), null)
+  assert.equal(readBffConfig({ GFMS_BFF_MODE: "integration", GFMS_INTEGRATION_AUTHORIZATION: "ISOLATED_NON_PRODUCTION_SUPABASE", GFMS_INTEGRATION_ENVIRONMENT_ID: "00000000-0000-4000-8000-000000000000", GFMS_BACKEND_URL: "http://127.0.0.1:5107", GFMS_SESSION_SECRET: "x".repeat(40), GFMS_SESSION_STORE: "memory", GFMS_ALLOW_LOCAL_SESSION_STORE: "true", GFMS_BACKEND_SHARED_SECRET: "short" }).backendSharedSecret, undefined)
 })

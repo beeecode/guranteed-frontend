@@ -9,7 +9,7 @@ const safeId = (value: unknown, name: string) => {
 
 const uploads: Record<string, UploadDefinition> = {
   "students-csv": { path: () => "/api/admin/students/import-csv", field: "csv_file", kind: "csv" },
-  "questions-csv": { path: () => "/api/admin/questions/import-csv", field: "csv_file", kind: "csv" },
+  "questions-csv": { path: () => "/api/admin/questions/import-csv", field: "csv_file", kind: "question-import" },
   "question-image": { path: () => "/api/admin/questions/upload-image", field: "image", kind: "question-image" },
   "exam-answers-csv": { path: (params) => `/api/admin/exams/${safeId(params.examId, "examId")}/import-answers`, field: "csv_file", kind: "csv" },
 }

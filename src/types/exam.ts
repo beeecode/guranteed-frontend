@@ -6,7 +6,8 @@ export interface Question {
   text: string
   /** Pre-labelled options, e.g. "A. Lagos" — the letter is `option[0]`, the label is `option.slice(3)`. */
   options: string[]
-  answer: AnswerLetter
+  /** Correct letter; fixtures only. Live questions never carry the answer key. */
+  answer?: AnswerLetter
 }
 
 /** Selected answers keyed by question id. */

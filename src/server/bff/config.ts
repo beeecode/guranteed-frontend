@@ -1,7 +1,7 @@
 import { validateServerBaseUrl } from "../../lib/api/core.ts"
 
 export type BffMode = "mock" | "disabled" | "integration"
-export interface BffConfig { mode: BffMode; backendUrl?: string; sessionSecret?: string; secureCookies: boolean; environmentId?: string; sessionStore?: "memory" | "external"; redisUrl?: string; redisPrefix?: string }
+export interface BffConfig { mode: BffMode; backendUrl?: string; sessionSecret?: string; secureCookies: boolean; environmentId?: string; sessionStore?: "memory" | "external"; redisUrl?: string; redisPrefix?: string; backendSharedSecret?: string }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const AUTHORIZATION = "ISOLATED_NON_PRODUCTION_SUPABASE"
@@ -25,6 +25,9 @@ export function readBffConfig(env: Record<string, string | undefined> = process.
     mode: "integration",
     backendUrl,
     sessionSecret: env.GFMS_SESSION_SECRET,
+    // Stage 11: proves to the API that forwarded visitor addresses come from this server.
+    // Ignored unless 32+ characters (the API ignores shorter secrets too).
+    backendSharedSecret: env.GFMS_BACKEND_SHARED_SECRET && env.GFMS_BACKEND_SHARED_SECRET.length >= 32 ? env.GFMS_BACKEND_SHARED_SECRET : undefined,
     environmentId: env.GFMS_INTEGRATION_ENVIRONMENT_ID,
     secureCookies: new URL(backendUrl).protocol === "https:" || env.NODE_ENV === "production",
     sessionStore,

@@ -1,7 +1,7 @@
 import Link from "next/link"
 import type { ExamBundle } from "@/types/exam"
 import type { MonitorStudent } from "@/types/student"
-import { MonitorStudentTable } from "./MonitorStudentTable"
+import { MonitorStudentTable, type MonitorAction } from "./MonitorStudentTable"
 
 /* ── Top stat tiles ─────────────────────────────────────────── */
 function StatTile({
@@ -80,7 +80,7 @@ function SubjectDistribution({
                 <div
                   className="h-full rounded-full"
                   style={{
-                    width: `${((dist[i] ?? 0) / students.length) * 100}%`,
+                    width: `${((dist[i] ?? 0) / Math.max(1, students.length)) * 100}%`,
                     background: "#B22234",
                   }}
                 />
@@ -102,7 +102,7 @@ function SubjectDistribution({
               <div
                 className="h-full rounded-full"
                 style={{
-                  width: `${(onBreak / students.length) * 100}%`,
+                  width: `${(onBreak / Math.max(1, students.length)) * 100}%`,
                   background: "#EAB308",
                 }}
               />
@@ -123,7 +123,7 @@ function SubjectDistribution({
               <div
                 className="h-full rounded-full"
                 style={{
-                  width: `${(completed / students.length) * 100}%`,
+                  width: `${(completed / Math.max(1, students.length)) * 100}%`,
                   background: "#16A34A",
                 }}
               />
@@ -139,9 +139,20 @@ function SubjectDistribution({
 export function BundleMonitor({
   bundle,
   students,
+  onAction,
+  backHref = "/admin/exams",
+  backLabel = "← Back to Examinations",
+  liveNote,
+  isLive = true,
 }: {
   bundle: ExamBundle
   students: MonitorStudent[]
+  /** Stage 11 live mode: real admin actions, back link and refresh note. */
+  onAction?: (student: MonitorStudent, action: MonitorAction) => Promise<void>
+  backHref?: string
+  backLabel?: string
+  liveNote?: string
+  isLive?: boolean
 }) {
   const stats = {
     total: students.length,
@@ -156,10 +167,10 @@ export function BundleMonitor({
       {/* Back */}
       <div className="mb-4">
         <Link
-          href="/admin/exams"
+          href={backHref}
           className="text-sm text-[#7A5C3A] hover:text-[#8B0000] font-medium"
         >
-          ← Back to Examinations
+          {backLabel}
         </Link>
       </div>
 
@@ -171,7 +182,7 @@ export function BundleMonitor({
         <div>
           <div className="font-semibold text-xl">{bundle.name}</div>
           <div className="text-white/65 text-sm">
-            {bundle.class} · {bundle.date}
+            {[bundle.class, bundle.date, liveNote].filter(Boolean).join(" · ")}
           </div>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {bundle.subjects.map((s, i) => (
@@ -196,8 +207,8 @@ export function BundleMonitor({
             border: "1px solid rgba(22,163,74,0.5)",
           }}
         >
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-white font-bold text-sm">Live Now</span>
+          <div className={isLive ? "w-2 h-2 rounded-full bg-green-400 animate-pulse" : "w-2 h-2 rounded-full bg-gray-300"} />
+          <span className="text-white font-bold text-sm">{isLive ? "Live Now" : "Not live"}</span>
         </div>
       </div>
 
@@ -242,7 +253,7 @@ export function BundleMonitor({
 
       <div className="grid lg:grid-cols-3 gap-6 mb-6">
         <div className="lg:col-span-2">
-          <MonitorStudentTable bundle={bundle} students={students} />
+          <MonitorStudentTable bundle={bundle} students={students} onAction={onAction} />
         </div>
 
         <div>

@@ -39,11 +39,15 @@ export interface MonitorStudent {
   currentQuestion: number
   /** Seconds left in the current subject. */
   timeLeft: number
-  status: "writing" | "break" | "done" | "notStarted"
+  status: "writing" | "break" | "done" | "notStarted" | "paused"
   connected: boolean
   subjectsCompleted: number
   /** Answered-question count keyed by subject index. */
   answers: Record<number, number>
+  /** Stage 11 live monitor: server bundle-attempt id (actions), question totals per subject index, last submitted subject attempt. */
+  sessionAttemptId?: number
+  questionCounts?: Record<number, number>
+  lastSubmittedAttemptId?: number | null
 }
 
 /** A parent account; each parent login is linked to a single child. */

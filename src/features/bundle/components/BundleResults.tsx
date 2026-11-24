@@ -1,36 +1,52 @@
 import Link from "next/link"
 import { Home } from "lucide-react"
 import { StudentPageHeader } from "@/components/layout/StudentPageHeader"
-import { teacherRemark } from "@/data/student"
 import { sum } from "@/lib/format"
 import type { ExamBundle } from "@/types/exam"
 import { summarizeBundleResults } from "../lib/results"
-import { SubjectResultsAccordion } from "./SubjectResultsAccordion"
+import { SubjectResultsAccordion, type SubjectResult } from "./SubjectResultsAccordion"
+
+/** Stage 11: server-released results. When given, nothing is computed from fixtures. */
+export interface LiveBundleResultsData {
+  subjectResults: SubjectResult[]
+  avgPct: number | null
+  grade: string | null
+  passedCount: number
+  passMarkCount: number
+  pending: boolean
+}
 
 /** Results summary for a completed bundle, with per-subject drill-down. */
 export function BundleResults({
   bundle,
   backHref = "/student/dashboard",
+  live,
 }: {
   bundle: ExamBundle
   backHref?: string
+  live?: LiveBundleResultsData
 }) {
-  const { subjectResults, avgPct, overall, bestSubject } =
-    summarizeBundleResults(bundle)
+  const summary = live ? null : summarizeBundleResults(bundle)
+  const subjectResults = live ? live.subjectResults : summary!.subjectResults
+  const avgLabel = live ? (live.avgPct === null ? "—" : `${live.avgPct}%`) : `${summary!.avgPct}%`
+  const scored = subjectResults.filter((result) => !result.live?.pending)
+  const bestSubject = scored.length ? scored.reduce((best, r) => (r.pct > best.pct ? r : best), scored[0]) : null
+  // Live: only a grade the server issued (no grade scale configured => no letter grade).
+  const headline = live
+    ? { grade: live.grade ?? "", emoji: live.pending ? "⏳" : "🎓", label: live.pending ? "Some answers are still being marked" : live.grade ? "Overall Grade" : "Overall Score" }
+    : { grade: summary!.overall.grade, emoji: summary!.overall.emoji, label: "Overall Grade" }
   const totalAnswered = sum(bundle.subjects, (s) => s.totalQuestions)
 
   const quickStats = [
-    { label: "Overall Avg", value: `${avgPct}%`, emoji: "📊" },
+    { label: "Overall Avg", value: avgLabel, emoji: "📊" },
     {
       label: "Best Subject",
-      value: bestSubject.name.split(" ")[0],
+      value: bestSubject ? bestSubject.name.split(" ")[0] : "—",
       emoji: "🏆",
     },
-    {
-      label: "Questions Done",
-      value: `${totalAnswered}/${totalAnswered}`,
-      emoji: "✅",
-    },
+    live
+      ? { label: "Subjects Passed", value: live.passMarkCount ? `${live.passedCount}/${live.passMarkCount}` : "—", emoji: "✅" }
+      : { label: "Questions Done", value: `${totalAnswered}/${totalAnswered}`, emoji: "✅" },
   ]
 
   return (
@@ -74,16 +90,18 @@ export function BundleResults({
                   className="font-playful font-bold text-white"
                   style={{ fontSize: "2rem", lineHeight: 1 }}
                 >
-                  {avgPct}%
+                  {avgLabel}
                 </div>
                 <div className="text-white/60 text-xs">Average</div>
               </div>
             </div>
-            <div className="font-playful font-bold text-white text-3xl mb-1">
-              {overall.grade}
-            </div>
+            {headline.grade ? (
+              <div className="font-playful font-bold text-white text-3xl mb-1">
+                {headline.grade}
+              </div>
+            ) : null}
             <div className="text-white/65 text-sm">
-              {overall.emoji} Overall Grade
+              {headline.emoji} {headline.label}
             </div>
           </div>
         </div>
@@ -116,24 +134,6 @@ export function BundleResults({
             📋 Subject Results
           </div>
           <SubjectResultsAccordion results={subjectResults} />
-        </div>
-
-        {/* Teacher remark */}
-        <div
-          className="mb-6 p-5"
-          style={{
-            background: "#fff",
-            borderRadius: 20,
-            border: "1.5px solid rgba(217,198,178,0.4)",
-          }}
-        >
-          <div className="text-xs font-bold text-[#7A5C3A] uppercase tracking-widest mb-2">
-            👩‍🏫 Teacher's Remark
-          </div>
-          <p className="text-[#1C0A04] text-sm italic">{teacherRemark.text}</p>
-          <div className="text-xs text-[#B8967A] mt-2">
-            {teacherRemark.author}
-          </div>
         </div>
 
         <Link
