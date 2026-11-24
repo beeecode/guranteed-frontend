@@ -89,7 +89,8 @@ function BundleJourneyStrip({ subjects }: { subjects: Subject[] }) {
 }
 
 /** Dark gradient card advertising the upcoming multi-subject exam. */
-export function BundleExamCard({ bundle }: { bundle: ExamBundle }) {
+/** `live` (Stage 11): server state decides the button; question totals are shown only when known. */
+export function BundleExamCard({ bundle, live }: { bundle: ExamBundle; live?: { actionLabel: string; status?: string } }) {
   const durationLabel = formatDuration(sum(bundle.subjects, (s) => s.duration))
   return (
     <div
@@ -114,14 +115,14 @@ export function BundleExamCard({ bundle }: { bundle: ExamBundle }) {
             border: "1px solid rgba(232,184,48,0.35)",
           }}
         >
-          📚 {bundle.subjects.length} Subjects · Bundled Exam
+          📚 {bundle.subjects.length} Subjects · Bundled Exam{live?.status ? ` · ${live.status}` : ""}
         </div>
 
         <h3 className="font-playful font-bold text-white text-xl mb-0.5">
           {bundle.name}
         </h3>
         <p className="text-white/55 text-xs mb-4">
-          {bundle.class} · {bundle.date} · {durationLabel} total
+          {[bundle.class, bundle.date, `${durationLabel} total`].filter(Boolean).join(" · ")}
         </p>
 
         <BundleJourneyStrip subjects={bundle.subjects} />
@@ -137,11 +138,11 @@ export function BundleExamCard({ bundle }: { bundle: ExamBundle }) {
               boxShadow: "0 4px 16px rgba(232,184,48,0.4)",
             }}
           >
-            START EXAM 🚀
+            {live ? live.actionLabel : "START EXAM 🚀"}
           </Link>
           <div className="text-white/50 text-xs">
             {bundle.subjects.length} subjects ·{" "}
-            {sum(bundle.subjects, (s) => s.totalQuestions)} questions
+            {live ? `${sum(bundle.subjects, (s) => s.totalMarks)} marks` : `${sum(bundle.subjects, (s) => s.totalQuestions)} questions`}
           </div>
         </div>
       </div>
@@ -154,7 +155,8 @@ export function RecentResults({
   viewAllHref = "/student/results",
 }: {
   results: RecentResult[]
-  viewAllHref?: string
+  /** null hides "View All" (no full results page in live mode yet). */
+  viewAllHref?: string | null
 }) {
   return (
     <div className="bg-white p-6" style={{ borderRadius: 24 }}>
@@ -162,12 +164,14 @@ export function RecentResults({
         <h3 className="font-playful font-bold text-[#1C0A04]">
           🏆 Recent Results
         </h3>
-        <Link
-          href={viewAllHref}
-          className="text-xs text-[#B22234] font-bold font-playful flex items-center gap-1"
-        >
-          View All <ChevronRight className="w-3 h-3" />
-        </Link>
+        {viewAllHref ? (
+          <Link
+            href={viewAllHref}
+            className="text-xs text-[#B22234] font-bold font-playful flex items-center gap-1"
+          >
+            View All <ChevronRight className="w-3 h-3" />
+          </Link>
+        ) : null}
       </div>
       <div className="space-y-3">
         {results.map((r, i) => (

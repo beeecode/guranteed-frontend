@@ -255,7 +255,9 @@ const doneConfetti = Array.from({ length: 24 }, (_, i) => ({
   animationDuration: `${(2.5 + ((i * 0.13) % 1.5)).toFixed(2)}s`,
 }))
 
-export function BundleDoneScreen({ bundle }: { bundle: ExamBundle }) {
+/** `showQuestionCount` is false for live bundles, where per-subject question totals are not
+ * known on this screen (it never claims a count it cannot verify). */
+export function BundleDoneScreen({ bundle, showQuestionCount = true }: { bundle: ExamBundle; showQuestionCount?: boolean }) {
   const router = useRouter()
   const totalQuestions = sum(bundle.subjects, (s) => s.totalQuestions)
 
@@ -342,14 +344,16 @@ export function BundleDoneScreen({ bundle }: { bundle: ExamBundle }) {
                 Subjects
               </div>
             </div>
-            <div>
-              <div className="font-playful font-bold text-[#B22234] text-lg">
-                {totalQuestions}/{totalQuestions}
+            {showQuestionCount && (
+              <div>
+                <div className="font-playful font-bold text-[#B22234] text-lg">
+                  {totalQuestions}/{totalQuestions}
+                </div>
+                <div className="text-[10px] text-[#7A5C3A] uppercase tracking-wide">
+                  Questions
+                </div>
               </div>
-              <div className="text-[10px] text-[#7A5C3A] uppercase tracking-wide">
-                Questions
-              </div>
-            </div>
+            )}
             <div>
               <div className="font-playful font-bold text-[#B22234] text-lg">
                 100%

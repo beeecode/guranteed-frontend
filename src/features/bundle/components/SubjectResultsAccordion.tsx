@@ -7,7 +7,15 @@ import { ChevronDown, ChevronRight } from "lucide-react"
 import type { BundleSubject } from "@/types/exam"
 import type { GradeInfo } from "../lib/grades"
 
-export type SubjectResult = BundleSubject & GradeInfo & { pct: number }
+/** `live` (Stage 11) carries server-released values; when present they replace the
+ * fixture-derived detail (no invented question counts or grades). */
+export interface LiveSubjectResult {
+  scoreLabel: string
+  passMarkLabel: string
+  passed: boolean | null
+  pending: boolean
+}
+export type SubjectResult = BundleSubject & GradeInfo & { pct: number; live?: LiveSubjectResult }
 export function SubjectResultsAccordion({
   results,
 }: {
@@ -62,9 +70,9 @@ export function SubjectResultsAccordion({
                 className="font-playful font-bold text-2xl"
                 style={{ color: result.color }}
               >
-                {result.grade}
+                {result.live?.pending ? "…" : result.grade}
               </div>
-              <div className="text-xs text-[#7A5C3A]">{result.pct}%</div>
+              <div className="text-xs text-[#7A5C3A]">{result.live?.pending ? "Being marked" : `${result.pct}%`}</div>
             </div>
             {openSubject === i ? (
               <ChevronDown className="w-4 h-4 text-[#7A5C3A] flex-shrink-0" />
@@ -82,6 +90,7 @@ export function SubjectResultsAccordion({
 }
 
 function SubjectResultDetail({ result }: { result: SubjectResult }) {
+  if (result.live) return <LiveResultDetail result={result} live={result.live} />
   const passed = result.pct >= result.passmark
   const items = [
     { label: "Score", value: `${result.pct}%`, color: result.color },
@@ -138,6 +147,39 @@ function SubjectResultDetail({ result }: { result: SubjectResult }) {
             : "Below pass mark — study harder next time!"}
         </span>
       </div>
+    </div>
+  )
+}
+
+function LiveResultDetail({ result, live }: { result: SubjectResult; live: LiveSubjectResult }) {
+  const items = [
+    { label: "Score", value: live.pending ? "Pending" : `${result.pct}%`, color: result.color },
+    { label: "Marks", value: live.scoreLabel, color: "#1C0A04" },
+    { label: "Pass Mark", value: live.passMarkLabel, color: "#7A5C3A" },
+  ]
+  const verdict = live.pending
+    ? { icon: "⏳", color: "#7A5C3A", background: "rgba(217,198,178,0.18)", text: "Some answers are still being marked by your teacher." }
+    : live.passed === null
+      ? null
+      : live.passed
+        ? { icon: "✅", color: "#16A34A", background: "rgba(22,163,74,0.08)", text: "Passed" }
+        : { icon: "❌", color: "#DC2626", background: "rgba(220,38,38,0.08)", text: "Below the pass mark" }
+  return (
+    <div className="px-5 pb-5 pt-1" style={{ borderTop: "1px solid rgba(217,198,178,0.3)" }}>
+      <div className="grid grid-cols-3 gap-3 mt-3">
+        {items.map((item) => (
+          <div key={item.label} className="text-center py-3" style={{ background: "rgba(217,198,178,0.12)", borderRadius: 12 }}>
+            <div className="font-playful font-bold text-base" style={{ color: item.color }}>{item.value}</div>
+            <div className="text-[10px] text-[#7A5C3A] font-semibold uppercase tracking-wide">{item.label}</div>
+          </div>
+        ))}
+      </div>
+      {verdict ? (
+        <div className="mt-3 flex items-center gap-2 px-3 py-2" style={{ background: verdict.background, borderRadius: 10 }}>
+          <span>{verdict.icon}</span>
+          <span className="text-xs font-semibold" style={{ color: verdict.color }}>{verdict.text}</span>
+        </div>
+      ) : null}
     </div>
   )
 }

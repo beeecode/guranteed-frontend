@@ -2,6 +2,7 @@ import { ApiError } from "../../lib/api/core.ts"
 import { createBackendGateway } from "./backend.ts"
 import { readBffConfig } from "./config.ts"
 import { requestIdFor } from "./requestId.ts"
+import { isIP } from "node:net"
 import { readCookie, serializeSessionCookie, SESSION_COOKIE, SessionManager, type BffSession } from "./session.ts"
 import { sessionStoreFor } from "./sessionStoreFactory.ts"
 
@@ -16,6 +17,15 @@ export const errorResponse = (error: unknown, headers?: HeadersInit, fallbackReq
   if (error instanceof ApiError) return json(body, error.status, headers, requestId)
   return json(body, known.status && known.status >= 400 && known.status <= 599 ? known.status : 500, headers, requestId)
 }
+/**
+ * Stage 11: the visitor address as the hosting platform reports it (Vercel sets
+ * x-forwarded-for / x-real-ip itself). Only a syntactically valid IP is forwarded.
+ */
+export function visitorAddress(request: Request): string | null {
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+  const candidate = forwarded || request.headers.get("x-real-ip")?.trim() || ""
+  return isIP(candidate) ? candidate : null
+}
 export async function integrationContext(request: Request, providedRequestId?: string) {
   const config = readBffConfig()
   const requestId = providedRequestId || requestIdFor(request)
@@ -23,7 +33,8 @@ export async function integrationContext(request: Request, providedRequestId?: s
   const manager = new SessionManager(sessionStoreFor(config), config.sessionSecret)
   const value = readCookie(request.headers.get("cookie"), SESSION_COOKIE)
   const snapshot = await manager.readCookie(value)
-  return { config, gateway: createBackendGateway(config.backendUrl, fetch, requestId), manager, requestId, snapshot, session: snapshot?.session ?? null }
+  const client = { address: visitorAddress(request), sharedSecret: config.backendSharedSecret }
+  return { config, gateway: createBackendGateway(config.backendUrl, fetch, requestId, client), manager, requestId, snapshot, session: snapshot?.session ?? null }
 }
 export const requireSession = async (request: Request, role?: "student" | "admin", providedRequestId?: string) => {
   const context = await integrationContext(request, providedRequestId)

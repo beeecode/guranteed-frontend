@@ -28,6 +28,8 @@ interface PortalDashboardShellProps {
   user: PortalUser
   navItems: PortalNavItem[]
   children: React.ReactNode
+  /** Stage 11: real sign-out (ends the secure session). Without it, Logout links to /cbt. */
+  onLogout?: () => void
 }
 export function PortalDashboardShell({
   portalName,
@@ -36,6 +38,7 @@ export function PortalDashboardShell({
   user,
   navItems,
   children,
+  onLogout,
 }: PortalDashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeNav, setActiveNav] = useState(navItems[0]?.id)
@@ -108,14 +111,26 @@ export function PortalDashboardShell({
           className="p-4"
           style={{ borderTop: "1px solid rgba(217,198,178,0.3)" }}
         >
-          <Link
-            href="/cbt"
-            className="flex items-center gap-3 px-4 py-3 text-sm text-[#B8967A] hover:text-red-600 transition-all font-medium font-playful"
-            style={{ borderRadius: 12 }}
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </Link>
+          {onLogout ? (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="flex w-full items-center gap-3 px-4 py-3 text-sm text-[#B8967A] hover:text-red-600 transition-all font-medium font-playful"
+              style={{ borderRadius: 12 }}
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </button>
+          ) : (
+            <Link
+              href="/cbt"
+              className="flex items-center gap-3 px-4 py-3 text-sm text-[#B8967A] hover:text-red-600 transition-all font-medium font-playful"
+              style={{ borderRadius: 12 }}
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </Link>
+          )}
         </div>
       </aside>
 
@@ -144,7 +159,7 @@ export function PortalDashboardShell({
               <h1 className="font-playful font-bold text-[#1C0A04] text-lg">
                 {title}
               </h1>
-              <p className="text-[#B8967A] text-xs">Session: {session}</p>
+              {session ? <p className="text-[#B8967A] text-xs">Session: {session}</p> : null}
             </div>
           </div>
           <div className="flex items-center gap-3">

@@ -1,19 +1,36 @@
+import type { ReactNode } from "react"
 import Link from "next/link"
 import { StudentPageHeader } from "@/components/layout/StudentPageHeader"
 import { formatDuration, sum } from "@/lib/format"
 import type { BundleSubject, ExamBundle } from "@/types/exam"
 
+type JourneyState = "done" | "current" | "next"
+
+/** Stage 11: live bundles pass real progress; question counts are only shown when known. */
+export interface LiveOverview {
+  completed: Set<number>
+  currentIdx: number | null
+  subtitle: string
+  action: ReactNode
+  notice?: ReactNode
+}
+
 function SubjectJourneyItem({
   subject,
   idx,
   isLast,
+  state = idx === 0 ? "current" : "next",
+  showQuestionCount = true,
 }: {
   subject: BundleSubject
   idx: number
   isLast: boolean
+  state?: JourneyState
+  showQuestionCount?: boolean
 }) {
+  const highlighted = state === "current"
   const stats = [
-    { label: "Questions", value: subject.totalQuestions },
+    showQuestionCount ? { label: "Questions", value: subject.totalQuestions } : { label: "Marks", value: subject.totalMarks },
     { label: "Duration", value: `${subject.duration} min` },
     { label: "Pass Mark", value: `${subject.passmark}/${subject.totalMarks}` },
   ]
@@ -25,11 +42,11 @@ function SubjectJourneyItem({
         <div
           className="w-10 h-10 flex items-center justify-center font-playful font-bold text-white text-sm flex-shrink-0"
           style={{
-            background: idx === 0 ? "#B22234" : "#D9C6B2",
+            background: state === "done" ? "#16A34A" : highlighted ? "#B22234" : "#D9C6B2",
             borderRadius: "50%",
           }}
         >
-          {idx + 1}
+          {state === "done" ? "✓" : idx + 1}
         </div>
         {!isLast && (
           <div
@@ -45,7 +62,7 @@ function SubjectJourneyItem({
         style={{
           borderRadius: 18,
           border:
-            idx === 0
+            highlighted
               ? "2px solid rgba(178,34,52,0.3)"
               : "1.5px solid rgba(217,198,178,0.4)",
         }}
@@ -56,7 +73,7 @@ function SubjectJourneyItem({
               className="w-12 h-12 flex items-center justify-center text-2xl flex-shrink-0"
               style={{
                 background:
-                  idx === 0 ? "rgba(178,34,52,0.08)" : "rgba(217,198,178,0.2)",
+                  highlighted ? "rgba(178,34,52,0.08)" : "rgba(217,198,178,0.2)",
                 borderRadius: 14,
               }}
             >
@@ -66,7 +83,14 @@ function SubjectJourneyItem({
               <div className="font-playful font-bold text-[#1C0A04] text-base">
                 {subject.name}
               </div>
-              {idx === 0 ? (
+              {state === "done" ? (
+                <span
+                  className="inline-flex items-center gap-1 text-xs font-bold font-playful px-2 py-0.5 mt-1"
+                  style={{ background: "rgba(22,163,74,0.1)", color: "#16A34A", borderRadius: 999 }}
+                >
+                  ✓ Completed
+                </span>
+              ) : highlighted ? (
                 <span
                   className="inline-flex items-center gap-1 text-xs font-bold font-playful px-2 py-0.5 mt-1"
                   style={{
@@ -124,8 +148,14 @@ function SubjectJourneyItem({
 }
 
 /** Pre-exam journey map listing every subject in the bundle. */
-export function BundleOverview({ bundle }: { bundle: ExamBundle }) {
+export function BundleOverview({ bundle, live }: { bundle: ExamBundle; live?: LiveOverview }) {
   const totalQuestions = sum(bundle.subjects, (s) => s.totalQuestions)
+  const totalMarks = sum(bundle.subjects, (s) => s.totalMarks)
+  const stateOf = (idx: number): JourneyState | undefined => {
+    if (!live) return undefined
+    if (live.completed.has(idx)) return "done"
+    return idx === live.currentIdx ? "current" : "next"
+  }
   const durationLabel = formatDuration(sum(bundle.subjects, (s) => s.duration))
 
   return (
@@ -135,7 +165,7 @@ export function BundleOverview({ bundle }: { bundle: ExamBundle }) {
     >
       <StudentPageHeader
         title={bundle.name}
-        subtitle={`${bundle.class} · ${bundle.session}`}
+        subtitle={live ? live.subtitle : `${bundle.class} · ${bundle.session}`}
       />
 
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-8">
@@ -176,6 +206,8 @@ export function BundleOverview({ bundle }: { bundle: ExamBundle }) {
                 subject={subject}
                 idx={idx}
                 isLast={idx === bundle.subjects.length - 1}
+                state={stateOf(idx)}
+                showQuestionCount={!live}
               />
             ))}
           </div>
@@ -212,7 +244,7 @@ export function BundleOverview({ bundle }: { bundle: ExamBundle }) {
           <div className="grid grid-cols-3 gap-4 text-center">
             {[
               { value: bundle.subjects.length, label: "Total Subjects" },
-              { value: totalQuestions, label: "Total Questions" },
+              live ? { value: totalMarks, label: "Total Marks" } : { value: totalQuestions, label: "Total Questions" },
               { value: durationLabel, label: "Est. Duration" },
             ].map((item) => (
               <div key={item.label}>
@@ -227,7 +259,10 @@ export function BundleOverview({ bundle }: { bundle: ExamBundle }) {
           </div>
         </div>
 
+        {live?.notice}
+
         {/* Start button */}
+        {live ? live.action : (
         <div className="flex flex-col sm:flex-row gap-4">
           <Link
             href={`/student/bundle/${bundle.id}/exam`}
@@ -252,6 +287,7 @@ export function BundleOverview({ bundle }: { bundle: ExamBundle }) {
             ← Not Yet
           </Link>
         </div>
+        )}
       </main>
     </div>
   )

@@ -49,20 +49,54 @@ const statusConfig: Record<MonitorStudent["status"], {
     color: "#1D4ED8",
     dot: "#60A5FA",
   },
+  paused: {
+    label: "Paused",
+    bg: "rgba(249,115,22,0.12)",
+    color: "#C2410C",
+    dot: "#F97316",
+  },
+}
+
+/** Stage 11: a real admin action on one student's bundle attempt. */
+export type MonitorAction = "extend" | "pause" | "resume" | "advance" | "reopen_subject" | "force_bundle"
+type ActionHandler = (student: MonitorStudent, action: MonitorAction) => Promise<void>
+type ActionItem = { label: string; action?: MonitorAction; icon: typeof Clock; color: string; dangerous: boolean }
+
+function liveActions(student: MonitorStudent): ActionItem[] {
+  const list: ActionItem[] = []
+  if (student.status === "writing") list.push({ label: "Extend Current Subject Time (+10 min)", action: "extend", icon: Clock, color: "#2563EB", dangerous: false })
+  if (student.status === "paused") list.push({ label: "Resume Student Exam", action: "resume", icon: RefreshCw, color: "#16A34A", dangerous: false })
+  else if (student.status === "writing" || student.status === "break") list.push({ label: "Pause Student Exam", action: "pause", icon: AlertTriangle, color: "#D97706", dangerous: false })
+  if (student.status === "writing") list.push({ label: "Submit Current Subject & Move On", action: "advance", icon: ChevronRight, color: "#DC2626", dangerous: true })
+  if (student.lastSubmittedAttemptId && student.status !== "notStarted") list.push({ label: "Reopen Last Completed Subject (15 min)", action: "reopen_subject", icon: RefreshCw, color: "#DC2626", dangerous: true })
+  if (student.status !== "done" && student.status !== "notStarted") list.push({ label: "Force Submit Full Bundle", action: "force_bundle", icon: CheckCircle, color: "#DC2626", dangerous: true })
+  return list
 }
 function StudentActionModal({
   bundle,
   student,
   onClose,
+  onAction,
 }: {
   bundle: ExamBundle
   student: MonitorStudent
   onClose: () => void
+  onAction?: ActionHandler
 }) {
   const [confirmAction, setConfirmAction] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const live = onAction ? liveActions(student) : null
+  const perform = async (action: MonitorAction) => {
+    if (!onAction) return
+    setBusy(true); setError("")
+    try { await onAction(student, action); onClose() }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "The action failed."); setConfirmAction(null) }
+    finally { setBusy(false) }
+  }
   const currentSubject = bundle.subjects[student.currentSubjectIdx]
 
-  const actions = [
+  const actions: ActionItem[] = [
     {
       label: "Extend Current Subject Time (+10 min)",
       icon: Clock,
@@ -192,7 +226,7 @@ function StudentActionModal({
               }}
             >
               <p className="text-sm text-red-700 font-medium mb-3">
-                Are you sure? This action cannot be undone.
+                {live ? `${confirmAction} — are you sure? This cannot be undone.` : "Are you sure? This action cannot be undone."}
               </p>
               <div className="flex gap-3">
                 <button
@@ -207,21 +241,29 @@ function StudentActionModal({
                   Cancel
                 </button>
                 <button
-                  onClick={onClose}
-                  className="flex-1 py-2.5 text-sm font-bold text-white"
+                  onClick={() => {
+                    const chosen = live?.find((item) => item.label === confirmAction)
+                    if (chosen?.action) void perform(chosen.action)
+                    else onClose()
+                  }}
+                  disabled={busy}
+                  className="flex-1 py-2.5 text-sm font-bold text-white disabled:opacity-60"
                   style={{ background: "#DC2626", borderRadius: 999 }}
                 >
-                  Confirm
+                  {busy ? "Working…" : "Confirm"}
                 </button>
               </div>
             </div>
           ) : (
             <div className="space-y-2">
-              {actions.map((a, i) => (
+              {error ? <p className="text-xs text-red-700 font-medium">{error}</p> : null}
+              {live && live.length === 0 ? <p className="text-sm text-gray-500">No actions are available for this student right now.</p> : null}
+              {(live ?? actions).map((a, i) => (
                 <button
                   key={i}
+                  disabled={busy}
                   onClick={() =>
-                    a.dangerous ? setConfirmAction(a.label) : onClose()
+                    a.dangerous ? setConfirmAction(a.label) : a.action && live ? void perform(a.action) : onClose()
                   }
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all text-left"
                   style={{
@@ -252,9 +294,12 @@ function StudentActionModal({
 export function MonitorStudentTable({
   bundle,
   students,
+  onAction,
 }: {
   bundle: ExamBundle
   students: MonitorStudent[]
+  /** Stage 11: when given, the action buttons call the server. */
+  onAction?: ActionHandler
 }) {
   const [selectedStudent, setSelectedStudent] = useState<MonitorStudent | null>(
     null,
@@ -267,6 +312,7 @@ export function MonitorStudentTable({
     writing: students.filter((s) => s.status === "writing").length,
     onBreak: students.filter((s) => s.status === "break").length,
     completed: students.filter((s) => s.status === "done").length,
+    paused: students.filter((s) => s.status === "paused").length,
   }
   const totalQ = sum(bundle.subjects, (sub) => sub.totalQuestions)
 
@@ -285,6 +331,7 @@ export function MonitorStudentTable({
           ["break", "On Break"],
           ["done", "Completed"],
           ["notStarted", "Not Started"],
+          ...(onAction ? [["paused", "Paused"]] : []),
         ].map(([val, label]) => (
           <button
             key={val}
@@ -308,7 +355,9 @@ export function MonitorStudentTable({
                   ? `(${stats.onBreak})`
                   : val === "done"
                     ? `(${stats.completed})`
-                    : `(${stats.notStarted})`}
+                    : val === "paused"
+                      ? `(${stats.paused})`
+                      : `(${stats.notStarted})`}
           </button>
         ))}
       </div>
@@ -354,15 +403,16 @@ export function MonitorStudentTable({
                   bundle.subjects[student.currentSubjectIdx]
                 const currentAnswered =
                   student.answers[student.currentSubjectIdx] ?? 0
-                const subjectPct = Math.round(
-                  (currentAnswered / (currentSubject?.totalQuestions ?? 10)) *
-                    100,
-                )
+                // Live rows carry real per-subject question totals; fixtures use the bundle's.
+                const currentTotal = student.questionCounts?.[student.currentSubjectIdx] ?? currentSubject?.totalQuestions ?? 0
+                const subjectPct = currentTotal ? Math.min(100, Math.round((currentAnswered / currentTotal) * 100)) : 0
                 const totalAnswered = sum(
                   Object.values(student.answers),
                   (v) => v,
                 )
-                const overallPct = Math.round((totalAnswered / totalQ) * 100)
+                const overallPct = student.questionCounts
+                  ? Math.min(100, Math.round(((student.subjectsCompleted + (student.status === "done" || !currentTotal ? 0 : currentAnswered / currentTotal)) / Math.max(1, bundle.subjects.length)) * 100))
+                  : totalQ ? Math.round((totalAnswered / totalQ) * 100) : 0
 
                 return (
                   <tr
@@ -446,7 +496,7 @@ export function MonitorStudentTable({
                             : "text-gray-600"
                         }`}
                       >
-                        {student.status === "done"
+                        {student.status === "done" || student.status === "notStarted"
                           ? "—"
                           : formatClock(student.timeLeft)}
                       </span>
@@ -495,6 +545,7 @@ export function MonitorStudentTable({
           bundle={bundle}
           student={selectedStudent}
           onClose={() => setSelectedStudent(null)}
+          onAction={onAction}
         />
       )}
     </>

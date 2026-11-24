@@ -1,18 +1,15 @@
 import type { Metadata } from "next"
 import { getBundle } from "@/data/bundles"
 import { BundleExamScreen } from "@/features/bundle/components/BundleExamScreen"
-import { IntegratedBundleExam } from "@/features/bundle/integration/IntegratedBundleExam"
+import { LiveBundleExamScreen } from "@/features/bundle/live/LiveBundleExamScreen"
 import { ExamModeBoundary } from "@/features/exam/integration/ExamModeBoundary"
 
 export const metadata: Metadata = { title: "Exam in Progress" }
 
-export default async function BundleExamPage({
-  params,
-  searchParams,
-}: PageProps<"/student/bundle/[bundleId]/exam">) {
+// Stage 11: real mode renders the designed exam screen with live server data. The
+// server decides the current subject, so the old ?attempt= / ?sessionAttempt= query
+// parameters are no longer needed (old links still work; they are ignored).
+export default async function BundleExamPage({ params }: PageProps<"/student/bundle/[bundleId]/exam">) {
   const { bundleId } = await params
-  const query = await searchParams
-  const attempt = typeof query.attempt === "string" ? query.attempt : undefined
-  const sessionAttempt = typeof query.sessionAttempt === "string" ? query.sessionAttempt : undefined
-  return <ExamModeBoundary preview={<BundleExamScreen bundle={getBundle(bundleId)} />} integrated={<IntegratedBundleExam bundleId={bundleId} attemptId={attempt} sessionAttemptId={sessionAttempt} />} />
+  return <ExamModeBoundary preview={<BundleExamScreen bundle={getBundle(bundleId)} />} integrated={<LiveBundleExamScreen bundleId={bundleId} />} />
 }

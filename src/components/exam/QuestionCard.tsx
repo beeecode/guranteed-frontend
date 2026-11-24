@@ -1,4 +1,5 @@
 import { Flag } from "lucide-react"
+import { MathText } from "./MathText"
 
 interface QuestionCardProps {
   number: number
@@ -51,7 +52,7 @@ export function QuestionCard({
         </button>
       </div>
       <p className="text-[#1C0A04] text-base sm:text-lg leading-relaxed font-medium">
-        {text}
+        <MathText text={text} />
       </p>
     </div>
   )

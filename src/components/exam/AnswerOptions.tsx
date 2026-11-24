@@ -1,6 +1,7 @@
 import type { Question } from "@/types/exam"
 import { optionLabel, optionLetter } from "@/features/exam/lib/questions"
 import { AnswerToast } from "./AnswerToast"
+import { MathText } from "./MathText"
 
 interface AnswerOptionsProps {
   question: Question
@@ -54,7 +55,7 @@ export function AnswerOptions({
             >
               {letter}
             </div>
-            <span className="flex-1">{optionLabel(opt)}</span>
+            <span className="flex-1"><MathText text={optionLabel(opt)} /></span>
             {selected && <span className="text-lg">✓</span>}
           </button>
         )

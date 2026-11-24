@@ -9,12 +9,13 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types src/lib/api/*.test.ts src/server/bff/*.test.ts src/features/exam/integration/*.test.ts",
+    "test": "node --test --experimental-strip-types src/lib/api/*.test.ts src/server/bff/*.test.ts src/features/exam/integration/*.test.ts src/features/bundle/live/*.test.ts src/lib/*.test.ts",
     "test:session-store": "node --test --experimental-strip-types --test-isolation=none src/server/bff/redisSession.integration.ts",
     "format": "oxfmt",
     "format:check": "oxfmt --check"
   },
   "dependencies": {
+    "katex": "0.16.45",
     "lucide-react": "^1.49.0",
     "next": "^16.3.8",
     "react": "^19.0.0",

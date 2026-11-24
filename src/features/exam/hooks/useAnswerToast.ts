@@ -14,7 +14,9 @@ const encouragements = [
 ]
 
 const TOAST_MS = 2200
-export function useAnswerToast() {
+/** `messages` overrides the playful praise (live exams use a neutral confirmation, because
+ * praise like "You got it!" can be read as "your answer is correct"). */
+export function useAnswerToast(messages: string[] = encouragements) {
   const [toast, setToast] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -27,11 +29,11 @@ export function useAnswerToast() {
 
   const celebrate = useCallback(() => {
     const msg =
-      encouragements[Math.floor(Math.random() * encouragements.length)]
+      messages[Math.floor(Math.random() * messages.length)]
     setToast(msg)
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => setToast(null), TOAST_MS)
-  }, [])
+  }, [messages])
 
   return { toast, celebrate }
 }

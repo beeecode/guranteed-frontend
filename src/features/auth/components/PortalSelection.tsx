@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { GoldWave } from "@/components/ui/GoldWave"
 import { Logo } from "@/components/ui/Logo"
+import { PARENT_PORTAL_ENABLED } from "@/lib/features"
 
 /** /cbt — choose between the student and admin portals. */
 export function PortalSelection() {
@@ -74,7 +75,7 @@ export function PortalSelection() {
         </div>
 
         {/* Portal Cards */}
-        <div className="grid md:grid-cols-2 gap-6 max-w-3xl w-full mx-auto">
+        <div className={`grid gap-6 w-full mx-auto ${PARENT_PORTAL_ENABLED ? "md:grid-cols-2 max-w-3xl" : "max-w-md"}`}>
           {/* Student Portal */}
           <div
             className="bg-white p-10 relative shadow-md"
@@ -131,6 +132,8 @@ export function PortalSelection() {
             </Link>
           </div>
 
+          {PARENT_PORTAL_ENABLED && (
+            <>
           {/* Parent Portal */}
           <div
             className="p-10 relative"
@@ -197,6 +200,8 @@ export function PortalSelection() {
               Parent Login →
             </Link>
           </div>
+            </>
+          )}
         </div>
 
         {/* Trust badges */}
