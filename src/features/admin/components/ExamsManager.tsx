@@ -15,6 +15,7 @@ import {
   LoaderCircle, AlertTriangle, CheckCircle2, X, Search,
 } from "lucide-react"
 import { bffClient } from "@/lib/api/bffClient"
+import { ApiError } from "@/lib/api/core"
 import { MathText } from "@/components/exam/MathText"
 
 interface Level { id: number; name: string; is_active?: boolean }
@@ -91,6 +92,19 @@ export function ExamsManager() {
     const finished = result.finalizedAttempts ? ` ${result.finalizedAttempts} unfinished attempt(s) were submitted and marked.` : ""
     const failed = result.failedAttempts?.length ? ` ${result.failedAttempts.length} could not be submitted — open Edit and save the exam (still Closed) to retry.` : ""
     return `"${exam.title}" is now ${status}.${finished}${failed}`
+  })
+  /** Deleting a taken exam erases its results: the server asks for the exact title first. */
+  const removeExam = (exam: Exam) => run(`delete-${exam.id}`, `Delete "${exam.title}"?`, async () => {
+    try {
+      await bffClient.action("admin-exam-delete", { params: { examId: exam.id }, payload: {} })
+      return "Exam deleted."
+    } catch (reason) {
+      if (!(reason instanceof ApiError && reason.code === "EXAM_HAS_ATTEMPTS")) throw reason
+      const typed = window.prompt(`${reason.message}\n\nThis cannot be undone. To delete it, type the exam title exactly:\n${exam.title}`)
+      if (typed === null) return "Nothing was deleted."
+      const result = await bffClient.action<{ deleted_attempts?: number }>("admin-exam-delete", { params: { examId: exam.id }, payload: { confirm: typed } })
+      return `Exam deleted, with ${result.deleted_attempts ?? 0} student attempt(s) and their answers.`
+    }
   })
   const exportResults = (exam: Exam) => run(`export-${exam.id}`, null, async () => {
     const file = await bffClient.download("exam-results", { examId: exam.id })
@@ -182,7 +196,7 @@ export function ExamsManager() {
                     ) : null}
                     <button onClick={() => setPreviewId(exam.id)} title="Preview questions" className="p-2 rounded-xl text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Eye className="w-4 h-4" /></button>
                     <button onClick={() => setEditing(exam)} title="Edit" className="p-2 rounded-xl text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"><Edit className="w-4 h-4" /></button>
-                    <button onClick={() => void run(`delete-${exam.id}`, `Delete "${exam.title}"? Exams that students have taken, or that a bundle uses, cannot be deleted.`, async () => { await bffClient.action("admin-exam-delete", { params: { examId: exam.id } }); return "Exam deleted." })} disabled={busy !== null} title="Delete" className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                    <button onClick={() => void removeExam(exam)} disabled={busy !== null} title="Delete" className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
                       {busy === `delete-${exam.id}` ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                     </button>
                   </div>
