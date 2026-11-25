@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { DoodleStar } from "@/components/ui/DoodleStar"
 import { FloatingCard } from "./HomeDecor"
+import { SCHOOL_PHOTOS } from "@/features/site/schoolPhotos"
 
 /** CBT CTA — child-friendly */
 export function CbtCtaSection() {
@@ -76,8 +77,8 @@ export function CbtCtaSection() {
             >
               <div className="absolute -top-4 left-12 w-24 h-5 bg-white/20 shadow-sm rounded-sm -rotate-1" />
               <img
-                src="https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=600&h=380&fit=crop&auto=format"
-                alt="CBT exam"
+                src={SCHOOL_PHOTOS.sweaters2.src}
+                alt={SCHOOL_PHOTOS.sweaters2.alt}
                 className="w-full h-64 object-cover"
                 style={{ borderRadius: 2 }}
               />

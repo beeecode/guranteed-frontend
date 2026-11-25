@@ -1,28 +1,38 @@
+import type { ReactNode } from "react"
 import { StudentPageHeader } from "@/components/layout/StudentPageHeader"
-import { examInstructions } from "@/data/exams"
-import type { Exam } from "@/types/exam"
-import { ExamAgreement } from "./ExamAgreement"
 
-/** Pre-exam screen: exam facts, numbered rules and the agreement gate. */
+export interface ExamFact { label: string; value: string; emoji: string }
+
+/** The rules students see before a live exam (they describe the real server behaviour). */
+export const LIVE_EXAM_INSTRUCTIONS = [
+  { emoji: "👀", text: "Read every question carefully before selecting your answer." },
+  { emoji: "⏱️", text: "Your timer starts on the school server when you press Start, and keeps running even if you close the page." },
+  { emoji: "💾", text: "Every answer is saved automatically. Wait for “Saved” under the question before moving on if your connection is slow." },
+  { emoji: "🔄", text: "If your computer restarts or the page closes, sign in again and open the exam: your saved answers and time are restored." },
+  { emoji: "🚩", text: "Use the flag to mark questions you want to come back to, and the navigator to jump between questions." },
+  { emoji: "✅", text: "When time runs out your answers are submitted automatically. Submitting is final." },
+]
+
+/** Pre-exam screen: exam facts, numbered rules and the agreement gate (footer). */
 export function ExamInstructions({
-  examId,
-  exam,
+  subject,
+  title,
+  stats,
+  instructions = LIVE_EXAM_INSTRUCTIONS,
+  footer,
 }: {
-  examId: string
-  exam: Exam
+  subject: string
+  title: string
+  stats: ExamFact[]
+  instructions?: Array<{ emoji: string; text: string }>
+  footer: ReactNode
 }) {
-  const stats = [
-    { label: "Duration", value: exam.durationLabel, emoji: "⏱️" },
-    { label: "Questions", value: String(exam.questionCount), emoji: "❓" },
-    { label: "Total Marks", value: String(exam.totalMarks), emoji: "💯" },
-    { label: "Pass Mark", value: `${exam.passmark}/100`, emoji: "🎯" },
-  ]
 
   return (
     <div className="min-h-screen" style={{ background: "#F9F5F1" }}>
       <StudentPageHeader
-        title={exam.subject}
-        subtitle={exam.title}
+        title={subject}
+        subtitle={title}
         backLinkClassName="text-sm text-[#7A5C3A] hover:text-[#8B0000] transition-colors font-medium font-playful"
       />
 
@@ -54,12 +64,12 @@ export function ExamInstructions({
             <div className="text-3xl">📖</div>
             <div>
               <h2 className="font-playful font-bold text-[#1C0A04] text-lg">
-                {exam.subject}
+                {subject}
               </h2>
-              <p className="text-[#7A5C3A] text-sm">{exam.title}</p>
+              <p className="text-[#7A5C3A] text-sm">{title}</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-2 ${stats.length >= 4 ? "sm:grid-cols-4" : "sm:grid-cols-3"} gap-4`}>
             {stats.map((info, i) => (
               <div
                 key={i}
@@ -84,7 +94,7 @@ export function ExamInstructions({
             📋 Exam Instructions
           </h2>
           <div className="space-y-4">
-            {examInstructions.map((inst, i) => (
+            {instructions.map((inst, i) => (
               <div
                 key={i}
                 className="flex gap-4 items-start p-3"
@@ -108,7 +118,7 @@ export function ExamInstructions({
           </div>
         </div>
 
-        <ExamAgreement examId={examId} />
+        {footer}
       </main>
     </div>
   )

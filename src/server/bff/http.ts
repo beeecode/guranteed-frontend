@@ -10,11 +10,28 @@ export const json = (body: unknown, status = 200, headers?: HeadersInit, request
   status,
   headers: { "cache-control": "private, no-store", ...(requestId ? { "x-request-id": requestId } : {}), ...headers },
 })
+/** Validation details are written for people ("enter a valid phone number"); only {field, issue} strings pass. */
+export const fieldDetails = (value: unknown): Array<{ field: string; issue: string }> => (Array.isArray(value)
+  ? value
+    .filter((item): item is { field: string; issue: string } => Boolean(item) && typeof item.field === "string" && typeof item.issue === "string")
+    .slice(0, 20)
+    .map((item) => ({ field: item.field.slice(0, 60), issue: item.issue.slice(0, 200) }))
+  : [])
+export const SERVER_OUTDATED_MESSAGE = "This feature is not available on the school server yet. The server needs to be restarted or updated — please tell the administrator."
 export const errorResponse = (error: unknown, headers?: HeadersInit, fallbackRequestId?: string) => {
   const known = error as { status?: number; code?: string; message?: string; requestId?: string }
   const requestId = known.requestId || fallbackRequestId
   const body = { message: known.message || "The request could not be completed.", code: known.code || "BFF_ERROR", ...(requestId ? { request_id: requestId } : {}) }
-  if (error instanceof ApiError) return json(body, error.status, headers, requestId)
+  if (error instanceof ApiError) {
+    // Stage 11: the API answered "route not found" — the server is older than this screen
+    // (not restarted or not yet updated). Say so instead of a technical message.
+    if (error.status === 404 && known.message === "API route not found.") {
+      return json({ ...body, message: SERVER_OUTDATED_MESSAGE, code: "SERVER_OUTDATED" }, 404, headers, requestId)
+    }
+    // Stage 11: pass validation details through so forms can say which field is wrong.
+    const details = error.status === 400 ? fieldDetails(error.details) : []
+    return json(details.length ? { ...body, details } : body, error.status, headers, requestId)
+  }
   return json(body, known.status && known.status >= 400 && known.status <= 599 ? known.status : 500, headers, requestId)
 }
 /**

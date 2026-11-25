@@ -1,11 +1,12 @@
 import { PortalLogin, type PortalLoginCopy } from "./PortalLogin"
 import { PortalLoginForm, type PortalLoginFormConfig } from "./PortalLoginForm"
+import { SCHOOL_PHOTOS } from "@/features/site/schoolPhotos"
 
 const copy: PortalLoginCopy = {
   portalName: "Parent Portal",
   heroImage: {
-    src: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=520&h=360&fit=crop&auto=format",
-    alt: "Students at school",
+    src: SCHOOL_PHOTOS.frontOfSchool2.src,
+    alt: SCHOOL_PHOTOS.frontOfSchool2.alt,
   },
   chips: [
     { emoji: "🔒", text: "100% Secure" },

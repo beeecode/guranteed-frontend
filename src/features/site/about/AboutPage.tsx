@@ -63,28 +63,12 @@ const values = [
   },
 ]
 
-const staff = [
-  {
-    name: "Dr. Mrs. Folake Adeleke",
-    role: "Head Teacher / Principal",
-    img: "photo-1573497019940-1c28c88b4f3e",
-  },
-  {
-    name: "Mr. Chukwuemeka Eze",
-    role: "Deputy Principal (Academics)",
-    img: "photo-1472099645785-5658abf4ff4e",
-  },
-  {
-    name: "Mrs. Amara Okonkwo",
-    role: "Head of Primary School",
-    img: "photo-1580489944761-15a19d654956",
-  },
-  {
-    name: "Mr. Seun Adeyemi",
-    role: "Head of ICT & CBT",
-    img: "photo-1507003211169-0a1dd7228f2d",
-  },
-]
+/**
+ * Leadership section. The previous entries used invented names and stock photos, so the
+ * section is hidden until the school supplies real names, roles and photos. To show it:
+ * fill this list (photo files under public/images/staff/) — it renders when not empty.
+ */
+const staff: Array<{ name: string; role: string; img: string }> = []
 
 export function AboutPage() {
   return (
@@ -208,7 +192,8 @@ export function AboutPage() {
         </div>
       </section>
 
-      {/* Staff */}
+      {/* Staff (shown only when real staff details are provided) */}
+      {staff.length > 0 ? (
       <section className="py-20 lg:py-28" style={{ background: "transparent" }}>
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
           <div className="section-number mb-4">05 — Leadership</div>
@@ -229,7 +214,7 @@ export function AboutPage() {
                     }}
                   />
                   <img
-                    src={`https://images.unsplash.com/${s.img}?w=400&h=420&fit=crop&auto=format`}
+                    src={s.img}
                     alt={s.name}
                     className="w-full object-cover h-56"
                   />
@@ -243,6 +228,7 @@ export function AboutPage() {
           </div>
         </div>
       </section>
+      ) : null}
 
       {/* CTA */}
       <section className="py-20 lg:py-24 text-center">

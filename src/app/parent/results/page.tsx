@@ -1,18 +1,11 @@
 import type { Metadata } from "next"
-import { currentParent } from "@/data/parent"
-import { examResults } from "@/data/student"
-import { StudentResults } from "@/features/results/components/StudentResults"
+import { redirect } from "next/navigation"
 
-export const metadata: Metadata = { title: "Child's Results" }
+export const metadata: Metadata = { title: "Child Results" }
 
-export default function ParentResultsPage() {
-  const firstName = currentParent.child.name.split(" ")[0]
-  return (
-    <StudentResults
-      results={examResults}
-      title={`${firstName}'s Results`}
-      backHref="/parent/dashboard"
-      performanceHref="/parent/performance"
-    />
-  )
+// The parent portal is postponed (lib/features.ts: PARENT_PORTAL_ENABLED = false); parents
+// use their child's login for now. Route protection already redirects; this keeps the
+// route in place for the future without sample data.
+export default function Page() {
+  redirect("/cbt")
 }

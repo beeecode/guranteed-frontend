@@ -1,5 +1,4 @@
 import type { PortalNavItem } from "@/components/layout/PortalDashboardShell"
-import { mockBundle } from "@/data/bundles"
 
 export const parentNavItems: PortalNavItem[] = [
   {
@@ -14,11 +13,5 @@ export const parentNavItems: PortalNavItem[] = [
     label: "Performance",
     emoji: "📈",
     path: "/parent/performance",
-  },
-  {
-    id: "exam-results",
-    label: "Exam Breakdown",
-    emoji: "📋",
-    path: `/parent/bundle/${mockBundle.id}/results`,
   },
 ]

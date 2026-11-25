@@ -1,7 +1,20 @@
 import Link from "next/link"
-import { FileText, Home } from "lucide-react"
+import { Home, RefreshCw } from "lucide-react"
 import { DoodleStar } from "@/components/ui/DoodleStar"
-import { submittedExamSummary as summary } from "@/data/exams"
+
+/**
+ * Stage 11: everything shown comes from the server. A score appears only once the school
+ * has released the result; "passed" only when the server decided it (bundle subjects have
+ * a pass mark, standalone exams do not) — the screen never invents a pass mark.
+ */
+export interface SubmittedSummary {
+  subject: string
+  dateLabel?: string
+  answered?: number | null
+  totalQuestions?: number | null
+  result: { percentage: number | null; scoreLabel: string; passed: boolean | null; passMark: number | null; grade: string | null } | null
+  pendingMessage: string
+}
 
 type FeedbackTier = {
   emoji: string
@@ -11,38 +24,22 @@ type FeedbackTier = {
   color: string
 }
 
-function getFeedback(score: number): FeedbackTier {
-  if (score >= 90)
+function getFeedback(result: SubmittedSummary["result"]): FeedbackTier {
+  if (!result || result.percentage === null)
     return {
-      emoji: "🏆",
-      heading: "OUTSTANDING! You're a Champion!",
-      sub: "Absolutely incredible! You nailed this exam. Your hard work is showing!",
-      badge: "🌟 TOP SCORER",
-      color: "#E8B830",
-    }
-  if (score >= 75)
-    return {
-      emoji: "⭐",
-      heading: "Excellent Work! You Did Amazing!",
-      sub: "Wow, what a great performance! You should be very proud of yourself.",
-      badge: "🎯 GREAT JOB",
+      emoji: "🎉",
+      heading: "Exam Submitted!",
+      sub: "Your answers are safely saved on the school server.",
+      badge: "✅ SUBMITTED",
       color: "#16A34A",
     }
-  if (score >= 50)
-    return {
-      emoji: "😊",
-      heading: "Well Done! You Passed!",
-      sub: "Good effort — you cleared the pass mark. Keep pushing and you'll do even better next time!",
-      badge: "✅ PASSED",
-      color: "#3B82F6",
-    }
-  return {
-    emoji: "💪",
-    heading: "Keep Practising! You'll Get There!",
-    sub: "Don't worry — every great learner started somewhere. Study hard and you'll ace it next time!",
-    badge: "🔁 TRY AGAIN",
-    color: "#F97316",
-  }
+  const pct = result.percentage
+  const badge = result.passed === true ? "✅ PASSED" : result.passed === false ? "🔁 NOT PASSED" : result.grade ? `📊 GRADE ${result.grade}` : "📊 YOUR RESULT"
+  if (pct >= 75)
+    return { emoji: "⭐", heading: "Excellent Work!", sub: "What a great performance! You should be very proud of yourself.", badge, color: "#16A34A" }
+  if (pct >= 50)
+    return { emoji: "😊", heading: "Well Done!", sub: "Good effort — keep pushing and you'll do even better next time!", badge, color: "#3B82F6" }
+  return { emoji: "💪", heading: "Keep Practising! You'll Get There!", sub: "Every great learner started somewhere. Study hard and you'll ace it next time!", badge, color: "#F97316" }
 }
 
 /* Deterministic confetti so server and client render the same pieces */
@@ -57,18 +54,17 @@ const confetti = Array.from({ length: 28 }, (_, i) => ({
 }))
 
 /** Celebration screen shown after a single-subject exam is submitted. */
-export function ExamSubmitted() {
-  const feedback = getFeedback(summary.score)
-  const pct = Math.round((summary.score / summary.total) * 100)
+export function ExamSubmitted({ summary, onCheckAgain }: { summary: SubmittedSummary; onCheckAgain?: () => void }) {
+  const feedback = getFeedback(summary.result)
+  const pct = summary.result?.percentage === null || summary.result?.percentage === undefined ? null : Math.round(summary.result.percentage)
 
   const details = [
     { emoji: "📖", label: "Subject", value: summary.subject },
-    { emoji: "📅", label: "Date", value: summary.date },
-    {
-      emoji: "✅",
-      label: "Answered",
-      value: `${summary.answered} of ${summary.totalQuestions} questions`,
-    },
+    ...(summary.dateLabel ? [{ emoji: "📅", label: "Date", value: summary.dateLabel }] : []),
+    ...(typeof summary.answered === "number" && typeof summary.totalQuestions === "number"
+      ? [{ emoji: "✅", label: "Answered", value: `${summary.answered} of ${summary.totalQuestions} questions` }]
+      : []),
+    ...(summary.result ? [{ emoji: "💯", label: "Score", value: summary.result.scoreLabel }] : []),
   ]
 
   return (
@@ -159,6 +155,7 @@ export function ExamSubmitted() {
             {feedback.sub}
           </p>
 
+          {pct !== null ? (<>
           {/* Score circle */}
           <div className="flex justify-center mb-6">
             <div
@@ -189,15 +186,16 @@ export function ExamSubmitted() {
             >
               <div
                 className="h-full rounded-full transition-all duration-1000"
-                style={{ width: `${pct}%`, background: feedback.color }}
+                style={{ width: `${Math.min(100, pct ?? 0)}%`, background: feedback.color }}
               />
             </div>
             <div className="flex justify-between text-[10px] font-semibold text-[#B8967A]">
               <span>0</span>
-              <span>Pass: 50</span>
+              {summary.result?.passMark !== null && summary.result?.passMark !== undefined ? <span>Pass: {summary.result.passMark}</span> : null}
               <span>100</span>
             </div>
           </div>
+          </>) : null}
 
           {/* Summary */}
           <div
@@ -224,27 +222,31 @@ export function ExamSubmitted() {
           </div>
 
           {/* Pending results note */}
-          <div
-            className="text-xs text-[#7A5C3A] mb-6 px-4 py-3 font-medium"
-            style={{ background: "rgba(217,198,178,0.2)", borderRadius: 12 }}
-          >
-            🕐 Your official result will be released by your teacher. Check back
-            soon!
-          </div>
+          {summary.result ? null : (
+            <div
+              className="text-xs text-[#7A5C3A] mb-6 px-4 py-3 font-medium"
+              style={{ background: "rgba(217,198,178,0.2)", borderRadius: 12 }}
+            >
+              🕐 {summary.pendingMessage}
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex flex-col gap-3">
-            <Link
-              href="/student/results"
-              className="py-4 font-playful font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
-              style={{
-                background: "#B22234",
-                borderRadius: 999,
-                boxShadow: "0 4px 16px rgba(178,34,52,0.3)",
-              }}
-            >
-              <FileText className="w-4 h-4" /> View My Results 📊
-            </Link>
+            {onCheckAgain && !summary.result ? (
+              <button
+                type="button"
+                onClick={onCheckAgain}
+                className="py-4 font-playful font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-xl flex items-center justify-center gap-2"
+                style={{
+                  background: "#B22234",
+                  borderRadius: 999,
+                  boxShadow: "0 4px 16px rgba(178,34,52,0.3)",
+                }}
+              >
+                <RefreshCw className="w-4 h-4" /> Check for my result
+              </button>
+            ) : null}
             <Link
               href="/student/dashboard"
               className="py-4 font-playful font-bold transition-all flex items-center justify-center gap-2"

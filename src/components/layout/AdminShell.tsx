@@ -23,8 +23,8 @@ import {
   Inbox,
   Layers,
 } from "lucide-react"
-import { adminProfile } from "@/data/admin"
-import { DemoModeNotice } from "@/components/ui/DemoModeNotice"
+// Preview (mock) mode no longer has sample people; show a neutral placeholder.
+const previewProfile = { name: "Preview", role: "Sample data removed", initials: "P" }
 
 const navItems = [
   {
@@ -84,8 +84,10 @@ function useShellProfile() {
     void (async () => {
       try {
         const config = await (await fetch("/api/bff/config", { cache: "no-store" })).json() as { mode?: string }
-        if (config.mode !== "integration") { if (active) setState({ live: false, profile: adminProfile }); return }
-        const user = await bffClient.session<{ full_name?: string; role?: string }>()
+        if (config.mode !== "integration") { if (active) setState({ live: false, profile: previewProfile }); return }
+        // One retry: a session refresh by another tab can briefly conflict.
+        const read = () => bffClient.session<{ full_name?: string; role?: string }>()
+        const user = await read().catch(async () => { await new Promise((resolve) => setTimeout(resolve, 800)); return read() })
         const name = user.full_name?.trim() || "Administrator"
         if (active) setState({ live: true, profile: { name, role: user.role === "admin" ? "Administrator" : "Signed in", initials: initialsOf(name) } })
       } catch {
@@ -117,7 +119,7 @@ export function AdminShell({ children, title, subtitle }: AdminShellProps) {
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#8B0000] transform transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0 lg:static flex flex-col`}
+        } lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:flex-shrink-0 overflow-y-auto flex flex-col`}
       >
         {}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
@@ -226,7 +228,6 @@ export function AdminShell({ children, title, subtitle }: AdminShellProps) {
 
         {}
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <DemoModeNotice className="mb-5" />
           {children}
         </main>
       </div>

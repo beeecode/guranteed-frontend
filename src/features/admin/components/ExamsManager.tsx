@@ -46,6 +46,12 @@ export function ExamsManager() {
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState<string | null>(null)
   const [editing, setEditing] = useState<Exam | "new" | null>(null)
+  // /admin/exams?new=1 (from the bundle wizard) opens Create Exam straight away.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("new") !== "1") return
+    const timer = window.setTimeout(() => setEditing("new"), 0)
+    return () => window.clearTimeout(timer)
+  }, [])
   const [previewId, setPreviewId] = useState<number | null>(null)
 
   const load = useCallback(async () => {
@@ -81,8 +87,10 @@ export function ExamsManager() {
     finally { setBusy(null) }
   }
   const setStatus = (exam: Exam, status: string, confirmText: string | null) => run(`status-${exam.id}`, confirmText, async () => {
-    await bffClient.action("admin-exam-update", { params: { examId: exam.id }, payload: { formData: { status } } })
-    return `"${exam.title}" is now ${status}.`
+    const result = await bffClient.action<{ finalizedAttempts?: number; failedAttempts?: number[] }>("admin-exam-update", { params: { examId: exam.id }, payload: { formData: { status } } })
+    const finished = result.finalizedAttempts ? ` ${result.finalizedAttempts} unfinished attempt(s) were submitted and marked.` : ""
+    const failed = result.failedAttempts?.length ? ` ${result.failedAttempts.length} could not be submitted — open Edit and save the exam (still Closed) to retry.` : ""
+    return `"${exam.title}" is now ${status}.${finished}${failed}`
   })
   const exportResults = (exam: Exam) => run(`export-${exam.id}`, null, async () => {
     const file = await bffClient.download("exam-results", { examId: exam.id })
@@ -154,10 +162,10 @@ export function ExamsManager() {
                     ) : null}
                     {exam.status === "active" ? (
                       <>
-                        <button onClick={() => void run(`pause-${exam.id}`, null, async () => { await bffClient.action("admin-exam-pause", { params: { examId: exam.id }, payload: { is_paused: !exam.is_paused } }); return exam.is_paused ? "Exam resumed." : "Exam paused: students cannot continue until resumed." })} disabled={busy !== null} className="flex items-center gap-1.5 px-3 py-2 bg-orange-50 text-orange-700 rounded-xl text-xs font-medium hover:bg-orange-100 transition-colors border border-orange-200 disabled:opacity-50">
+                        <button onClick={() => void run(`pause-${exam.id}`, null, async () => { await bffClient.action("admin-exam-pause", { params: { examId: exam.id }, payload: { is_paused: !exam.is_paused } }); return exam.is_paused ? "Exam resumed." : "Exam paused: students cannot continue until resumed. Note: their timers keep running." })} disabled={busy !== null} className="flex items-center gap-1.5 px-3 py-2 bg-orange-50 text-orange-700 rounded-xl text-xs font-medium hover:bg-orange-100 transition-colors border border-orange-200 disabled:opacity-50">
                           {exam.is_paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />} {exam.is_paused ? "Resume" : "Pause"}
                         </button>
-                        <button onClick={() => void setStatus(exam, "closed", `Close "${exam.title}"? Ongoing attempts are submitted when students next contact the server.`)} disabled={busy !== null} className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 text-gray-600 rounded-xl text-xs font-medium hover:bg-gray-100 transition-colors disabled:opacity-50">
+                        <button onClick={() => void setStatus(exam, "closed", `Close "${exam.title}"? Students still writing it are submitted now with the answers they have saved, and marked.`)} disabled={busy !== null} className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 text-gray-600 rounded-xl text-xs font-medium hover:bg-gray-100 transition-colors disabled:opacity-50">
                           <Lock className="w-3.5 h-3.5" /> Close
                         </button>
                       </>
@@ -174,7 +182,7 @@ export function ExamsManager() {
                     ) : null}
                     <button onClick={() => setPreviewId(exam.id)} title="Preview questions" className="p-2 rounded-xl text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Eye className="w-4 h-4" /></button>
                     <button onClick={() => setEditing(exam)} title="Edit" className="p-2 rounded-xl text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"><Edit className="w-4 h-4" /></button>
-                    <button onClick={() => void run(`delete-${exam.id}`, `Delete "${exam.title}"? Exams that students have already taken cannot be deleted.`, async () => { await bffClient.action("admin-exam-delete", { params: { examId: exam.id } }); return "Exam deleted." })} disabled={busy !== null} title="Delete" className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                    <button onClick={() => void run(`delete-${exam.id}`, `Delete "${exam.title}"? Exams that students have taken, or that a bundle uses, cannot be deleted.`, async () => { await bffClient.action("admin-exam-delete", { params: { examId: exam.id } }); return "Exam deleted." })} disabled={busy !== null} title="Delete" className="p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
                       {busy === `delete-${exam.id}` ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                     </button>
                   </div>
@@ -203,6 +211,9 @@ function ExamModal({ exam, levels, subjects, onClose, onSaved }: { exam: Exam | 
   const [bank, setBank] = useState<BankQuestion[]>([])
   const [bankLoading, setBankLoading] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [original, setOriginal] = useState<Set<number>>(new Set())
+  // Questions written directly into an older exam (not copied from the bank) are always kept.
+  const [ownQuestions, setOwnQuestions] = useState(0)
   const [search, setSearch] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -212,7 +223,12 @@ function ExamModal({ exam, levels, subjects, onClose, onSaved }: { exam: Exam | 
     if (!exam) return
     let active = true
     void bffClient.action<{ questions?: Array<{ bank_question_id?: number | null }> }>("admin-exam-get", { params: { examId: exam.id } })
-      .then((value) => { if (active) setSelected(new Set((value.questions ?? []).map((q) => Number(q.bank_question_id)).filter((id) => id > 0))) })
+      .then((value) => {
+        if (!active) return
+        const ids = new Set((value.questions ?? []).map((q) => Number(q.bank_question_id)).filter((id) => id > 0))
+        setSelected(ids); setOriginal(ids)
+        setOwnQuestions((value.questions ?? []).filter((q) => !q.bank_question_id).length)
+      })
       .catch(() => undefined)
     return () => { active = false }
   }, [exam])
@@ -243,7 +259,7 @@ function ExamModal({ exam, levels, subjects, onClose, onSaved }: { exam: Exam | 
       if (!Number.isInteger(duration) || duration < 1 || duration > 480) return "Duration must be 1–480 minutes."
     }
     if (step === 1) {
-      if (form.mode === "fixed" && selected.size === 0) return "Select at least one question."
+      if (form.mode === "fixed" && selected.size + ownQuestions === 0) return "Select at least one question."
       if (form.mode === "random" && !(Number(form.random_draw_count) > 0)) return "Enter how many questions to draw."
       if (form.mode === "random" && Number(form.random_draw_count) > bank.length) return `The bank has only ${bank.length} questions for this subject.`
     }
@@ -267,8 +283,11 @@ function ExamModal({ exam, levels, subjects, onClose, onSaved }: { exam: Exam | 
       random_draw_count: form.mode === "random" ? Number(form.random_draw_count) : null,
     }
     const selectedQuestionIds = form.mode === "fixed" ? [...selected] : []
+    // Edits send the question list only when it changed: the server refuses question
+    // changes once students have started, but other settings stay editable.
+    const unchanged = selectedQuestionIds.length === original.size && selectedQuestionIds.every((qid) => original.has(qid))
     try {
-      if (exam) await bffClient.action("admin-exam-update", { params: { examId: exam.id }, payload: { formData, selectedQuestionIds } })
+      if (exam) await bffClient.action("admin-exam-update", { params: { examId: exam.id }, payload: unchanged ? { formData } : { formData, selectedQuestionIds } })
       else await bffClient.action("admin-exam-create", { payload: { formData, selectedQuestionIds } })
       onSaved(exam ? "Exam updated." : "Exam created.")
     } catch (reason) { setError(errorText(reason, "The exam could not be saved.")); setSaving(false) }
@@ -350,7 +369,7 @@ function ExamModal({ exam, levels, subjects, onClose, onSaved }: { exam: Exam | 
                     <button type="button" onClick={() => setSelected(new Set(visibleBank.map((q) => q.id)))} className="text-xs font-medium text-[#B22234] underline">Select all</button>
                     <button type="button" onClick={() => setSelected(new Set())} className="text-xs text-gray-500 underline">Clear</button>
                   </div>
-                  <div className="text-xs text-gray-500">{selected.size} selected · {selectedMarks} marks</div>
+                  <div className="text-xs text-gray-500">{selected.size} selected · {selectedMarks} marks{ownQuestions ? ` · plus ${ownQuestions} question(s) written directly in this exam (kept)` : ""}</div>
                   <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
                     {visibleBank.map((q, index) => (
                       <label key={q.id} className={`flex items-start gap-3 rounded-xl border px-3 py-2 text-sm cursor-pointer ${selected.has(q.id) ? "border-[#B22234] bg-[#B22234]/5" : "border-[#E8D9CB]"}`}>

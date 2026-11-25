@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/Spinner"
 import { usePortalLogin } from "../hooks/usePortalLogin"
+import { returnPath } from "../returnPath"
 import { AuthModeNotice } from "./AuthModeNotice"
 
 export function AdminLoginForm() {
@@ -15,7 +16,7 @@ export function AdminLoginForm() {
     portal: "admin",
     identifier: form.email,
     password: form.password,
-    onSuccess: () => router.push("/admin/dashboard"),
+    onSuccess: () => router.push(returnPath("/admin", "/admin/dashboard")),
     validationMessage: "Please enter your email and password.",
   })
 

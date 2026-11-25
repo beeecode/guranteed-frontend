@@ -54,7 +54,7 @@ export function PerformanceCharts({
       {}
       <div className="bg-white rounded-3xl p-6 shadow-sm">
         <h3 className="font-heading font-700 text-gray-900 mb-5">
-          Score Trend This Session
+          Score Trend
         </h3>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart

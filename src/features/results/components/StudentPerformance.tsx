@@ -1,48 +1,49 @@
 import { AlertCircle, Star, TrendingUp } from "lucide-react"
 import { SimplePortalHeader } from "@/components/layout/SimplePortalHeader"
+import { scoreColor, type ResultsSummary } from "../types"
 import { PerformanceCharts } from "./PerformanceCharts"
 
-const overviewCards = [
-  {
-    label: "Average Score",
-    value: "80%",
-    sub: "Across all subjects",
-    icon: Star,
-    color: "#B22234",
-  },
-  {
-    label: "Best Subject",
-    value: "Basic Science",
-    sub: "92% — Excellent!",
-    icon: TrendingUp,
-    color: "#16A34A",
-  },
-  {
-    label: "Needs Improvement",
-    value: "Creative Arts",
-    sub: "65% — Keep going!",
-    icon: AlertCircle,
-    color: "#D97706",
-  },
-]
-
-const scoreColor = (score: number) =>
-  score >= 80 ? "#16A34A" : score >= 60 ? "#D97706" : "#DC2626"
-
 interface StudentPerformanceProps {
-  subjectScores: { subject: string; score: number }[]
-  termScores: { term: string; score: number }[]
+  summary: ResultsSummary
   title?: string
   backHref?: string
 }
 
-/** Performance analytics: overview cards, charts and per-subject progress bars. */
+/**
+ * Performance analytics from RELEASED results only (Stage 11: live data): overview cards,
+ * score by subject, the score trend over time and per-subject progress bars.
+ */
 export function StudentPerformance({
-  subjectScores,
-  termScores,
+  summary,
   title = "My Performance",
   backHref,
 }: StudentPerformanceProps) {
+  const subjectScores = summary.subjects
+    .filter((s) => s.average !== null)
+    .map((s) => ({ subject: s.name, score: Math.round(s.average ?? 0) }))
+  const trend = summary.entries
+    .filter((e) => e.percentage !== null && e.submitted_at)
+    .sort((a, b) => Date.parse(a.submitted_at ?? "") - Date.parse(b.submitted_at ?? ""))
+    .map((e) => ({ term: new Date(e.submitted_at ?? "").toLocaleDateString(undefined, { day: "numeric", month: "short" }), score: Math.round(e.percentage ?? 0) }))
+  const best = subjectScores[0]
+  const weakest = subjectScores.length > 1 ? subjectScores[subjectScores.length - 1] : undefined
+  const overviewCards = [
+    { label: "Average Score", value: summary.stats.released ? `${Math.round(summary.stats.average)}%` : "—", sub: `From ${summary.stats.released} released result(s)`, icon: Star, color: "#B22234" },
+    { label: "Best Subject", value: best?.subject ?? "—", sub: best ? `${best.score}% average` : "No released results yet", icon: TrendingUp, color: "#16A34A" },
+    { label: "Needs Improvement", value: weakest?.subject ?? "—", sub: weakest ? `${weakest.score}% — keep going!` : "Needs two or more subjects", icon: AlertCircle, color: "#D97706" },
+  ]
+
+  if (subjectScores.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#F9F5F1]">
+        <SimplePortalHeader title={title} backHref={backHref} maxWidthClassName="max-w-5xl" backLinkClassName="flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#8B0000]" />
+        <main className="max-w-5xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-3xl p-10 shadow-sm text-center text-sm text-gray-500">📈 Your performance appears here once the school releases your results.</div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[#F9F5F1]">
       <SimplePortalHeader
@@ -79,7 +80,7 @@ export function StudentPerformance({
 
         <PerformanceCharts
           subjectScores={subjectScores}
-          termScores={termScores}
+          termScores={trend}
         />
 
         {/* Subject progress bars */}

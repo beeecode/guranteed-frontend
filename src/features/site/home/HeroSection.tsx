@@ -1,5 +1,6 @@
 import { DoodleStar } from "@/components/ui/DoodleStar"
 import { GoldWave } from "@/components/ui/GoldWave"
+import { SCHOOL_PHOTOS } from "@/features/site/schoolPhotos"
 import {
   DoodlePaperPlane,
   DoodlePencil,
@@ -50,8 +51,8 @@ export function HeroSection() {
               }}
             >
               <img
-                src="https://images.unsplash.com/photo-1509062522246-3755977927d7?w=700&h=560&fit=crop&auto=format"
-                alt="Students at GFMS"
+                src={SCHOOL_PHOTOS.frontOfSchool.src}
+                alt={SCHOOL_PHOTOS.frontOfSchool.alt}
                 className="w-full object-cover"
                 style={{
                   height: 400,
@@ -75,9 +76,9 @@ export function HeroSection() {
               }}
             >
               <img
-                src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=300&h=220&fit=crop&auto=format"
+                src={SCHOOL_PHOTOS.seniorStudents.src}
                 className="w-full h-24 object-cover"
-                alt="School life"
+                alt={SCHOOL_PHOTOS.seniorStudents.alt}
               />
               <p className="text-center text-[9px] font-bold mt-2 text-[#7A5C3A] font-playful">
                 Fun at School! 🎉

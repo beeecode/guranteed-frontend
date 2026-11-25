@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/Spinner"
 import { usePortalLogin } from "../hooks/usePortalLogin"
+import { returnPath } from "../returnPath"
 import { AuthModeNotice } from "./AuthModeNotice"
 
 const inputStyle = {
@@ -41,7 +42,7 @@ export function PortalLoginForm({ config }: { config: PortalLoginFormConfig }) {
     portal: config.portal || "student",
     identifier: form.id,
     password: form.password,
-    onSuccess: () => router.push(config.successPath),
+    onSuccess: () => router.push(config.portal === "parent" ? config.successPath : returnPath("/student", config.successPath)),
     validationMessage: config.errorMessage,
   })
 

@@ -43,7 +43,32 @@ export function AdmissionsPage() {
             Admissions Open
           </span>
         </div>
+        <a
+          href="#apply"
+          className="inline-flex items-center gap-2 px-8 py-4 text-sm font-semibold text-white hover:opacity-90 transition-all"
+          style={{ background: "#5C1010", borderRadius: 4 }}
+        >
+          Apply Now ↓
+        </a>
       </PageHero>
+
+      {/* Form — first, so parents do not have to scroll past everything else */}
+      <section id="apply" className="py-16 lg:py-20 scroll-mt-24" style={{ borderBottom: "1px solid rgba(28,10,4,0.08)" }}>
+        <div className="max-w-3xl mx-auto px-5 sm:px-8">
+          <div className="section-number mb-4">01 — Apply Online</div>
+          <h2 className="font-display font-bold text-[#1C0A04] text-4xl mb-2">
+            Start Your Application.
+          </h2>
+          <GoldWave width={200} />
+          <p className="text-[#7A5C3A] text-sm mt-3 mb-10">
+            Tell us about your child and attach the documents you have. You will get a
+            reference number straight away, and our admissions team will contact you.
+            How the process works, the requirements and common questions are below the form.
+          </p>
+
+          <AdmissionsForm />
+        </div>
+      </section>
 
       {/* Process */}
       <section
@@ -51,7 +76,7 @@ export function AdmissionsPage() {
         style={{ borderBottom: "1px solid rgba(28,10,4,0.08)" }}
       >
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
-          <div className="section-number mb-4">01 — The Process</div>
+          <div className="section-number mb-4">02 — The Process</div>
           <h2 className="font-display font-bold text-[#1C0A04] text-4xl lg:text-5xl mb-2">
             How To Apply.
           </h2>
@@ -95,7 +120,7 @@ export function AdmissionsPage() {
           <div className="grid lg:grid-cols-2 gap-12">
             {/* Available Classes */}
             <div>
-              <div className="section-number mb-4">02 — Available Spaces</div>
+              <div className="section-number mb-4">03 — Available Spaces</div>
               <h2 className="font-display font-bold text-[#1C0A04] text-3xl mb-8">
                 Open Classes.
               </h2>
@@ -141,7 +166,7 @@ export function AdmissionsPage() {
 
             {/* Requirements */}
             <div>
-              <div className="section-number mb-4">03 — Requirements</div>
+              <div className="section-number mb-4">04 — Requirements</div>
               <h2 className="font-display font-bold text-[#1C0A04] text-3xl mb-8">
                 What To Bring.
               </h2>
@@ -184,7 +209,7 @@ export function AdmissionsPage() {
         style={{ borderBottom: "1px solid rgba(28,10,4,0.08)" }}
       >
         <div className="max-w-4xl mx-auto px-5 sm:px-8">
-          <div className="section-number mb-4">04 — FAQ</div>
+          <div className="section-number mb-4">05 — FAQ</div>
           <h2 className="font-display font-bold text-[#1C0A04] text-4xl mb-2">
             Common Questions.
           </h2>
@@ -193,22 +218,6 @@ export function AdmissionsPage() {
         </div>
       </section>
 
-      {/* Form */}
-      <section className="py-20 lg:py-28" style={{ background: "transparent" }}>
-        <div className="max-w-3xl mx-auto px-5 sm:px-8">
-          <div className="section-number mb-4">05 — Start Your Application</div>
-          <h2 className="font-display font-bold text-[#1C0A04] text-4xl mb-2">
-            Discuss Your Admission.
-          </h2>
-          <GoldWave width={200} />
-          <p className="text-[#7A5C3A] text-sm mt-3 mb-10">
-            Fill out this form and our admissions team will contact you within
-            24 hours.
-          </p>
-
-          <AdmissionsForm />
-        </div>
-      </section>
     </>
   )
 }

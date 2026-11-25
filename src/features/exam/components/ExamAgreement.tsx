@@ -1,13 +1,21 @@
 "use client"
 
-/** Honour-code checkbox plus the Start / Go Back buttons it unlocks. */ /* Agreement */ /* Start button */
+/**
+ * Honour-code checkbox plus the Start / Go Back buttons it unlocks. Stage 11: Start calls
+ * the server (onStart); the timer only begins once the server creates the attempt.
+ */
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-export function ExamAgreement({ examId }: { examId: string }) {
-  const router = useRouter()
+
+export function ExamAgreement({ onStart, starting = false, startLabel = "Let's Go! I'm Ready! 🚀", error = "" }: {
+  onStart: () => void
+  starting?: boolean
+  startLabel?: string
+  error?: string
+}) {
   const [agreed, setAgreed] = useState(false)
+  const ready = agreed && !starting
 
   return (
     <>
@@ -46,22 +54,26 @@ export function ExamAgreement({ examId }: { examId: string }) {
         </label>
       </div>
 
-      {}
+      {error ? (
+        <div role="alert" className="mb-4 p-4 text-sm font-medium" style={{ borderRadius: 18, background: "rgba(249,115,22,0.10)", border: "2px solid rgba(249,115,22,0.35)", color: "#9A3412" }}>
+          {error}
+        </div>
+      ) : null}
       <div className="flex flex-col sm:flex-row gap-4">
         <button
-          onClick={() => router.push(`/student/exam/${examId}`)}
-          disabled={!agreed}
+          onClick={onStart}
+          disabled={!ready}
           className="flex-1 py-4 font-playful font-bold text-lg transition-all duration-200"
           style={{
-            background: agreed ? "#B22234" : "#D9C6B2",
-            color: agreed ? "#fff" : "#7A5C3A",
+            background: ready ? "#B22234" : "#D9C6B2",
+            color: ready ? "#fff" : "#7A5C3A",
             borderRadius: 999,
-            cursor: agreed ? "pointer" : "not-allowed",
-            boxShadow: agreed ? "0 4px 20px rgba(178,34,52,0.35)" : "none",
+            cursor: ready ? "pointer" : "not-allowed",
+            boxShadow: ready ? "0 4px 20px rgba(178,34,52,0.35)" : "none",
             transform: "none",
           }}
         >
-          {agreed ? "Let's Go! I'm Ready! 🚀" : "Please agree to continue..."}
+          {starting ? "Starting securely…" : agreed ? startLabel : "Please agree to continue..."}
         </button>
         <Link
           href="/student/dashboard"
