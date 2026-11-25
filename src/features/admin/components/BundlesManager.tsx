@@ -8,8 +8,9 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, CheckCircle2, Download, Eye, EyeOff, Layers, LoaderCircle, Lock, MonitorPlay, Plus, Send } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Download, Eye, EyeOff, Layers, LoaderCircle, Lock, MonitorPlay, Plus, Send, Trash2 } from "lucide-react"
 import { bffClient } from "@/lib/api/bffClient"
+import { ApiError } from "@/lib/api/core"
 import { subjectEmoji } from "@/features/bundle/live/adapters"
 
 interface BundleRow {
@@ -42,6 +43,20 @@ export function BundlesManager() {
     finally { setLoading(false) }
   }, [])
   useEffect(() => { const timer = window.setTimeout(() => { void load() }, 0); return () => window.clearTimeout(timer) }, [load])
+
+  /** Deleting a bundle that students took erases their results: the server asks for the exact name first. */
+  const removeBundle = (bundle: { id: number; session_name: string }) => run(`delete-${bundle.id}`, `Delete the bundle "${bundle.session_name}"? Its subject exams are kept.`, async () => {
+    try {
+      await bffClient.action("admin-bundle-delete", { params: { bundleId: bundle.id }, payload: {} })
+      return "Bundle deleted."
+    } catch (reason) {
+      if (!(reason instanceof ApiError && reason.code === "BUNDLE_HAS_ATTEMPTS")) throw reason
+      const typed = window.prompt(`${reason.message}\n\nThis cannot be undone. To delete it, type the bundle name exactly:\n${bundle.session_name}`)
+      if (typed === null) return "Nothing was deleted."
+      const result = await bffClient.action<{ deleted_students?: number }>("admin-bundle-delete", { params: { bundleId: bundle.id }, payload: { confirm: typed } })
+      return `Bundle deleted, with the results of ${result.deleted_students ?? 0} student(s).`
+    }
+  })
 
   const run = async (key: string, confirmText: string | null, task: () => Promise<string>) => {
     if (confirmText && !window.confirm(confirmText)) return
@@ -130,6 +145,9 @@ export function BundlesManager() {
                         {busy === `export-${bundle.id}` ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Export CSV
                       </button>
                     ) : null}
+                    <button onClick={() => void removeBundle(bundle)} disabled={busy !== null} title={isOpen ? "Close the bundle before deleting it if students have taken it" : "Delete this bundle"} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-200 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50">
+                      {busy === `delete-${bundle.id}` ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Delete
+                    </button>
                   </div>
                 </div>
               </div>
