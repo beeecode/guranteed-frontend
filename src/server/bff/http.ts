@@ -32,7 +32,15 @@ export const errorResponse = (error: unknown, headers?: HeadersInit, fallbackReq
     const details = error.status === 400 ? fieldDetails(error.details) : []
     return json(details.length ? { ...body, details } : body, error.status, headers, requestId)
   }
-  return json(body, known.status && known.status >= 400 && known.status <= 599 ? known.status : 500, headers, requestId)
+  const status = known.status && known.status >= 400 && known.status <= 599 ? known.status : 500
+  // Stage 11: an unexpected fault in this server (e.g. the session store: "NOAUTH
+  // Authentication required" was shown on the live login page) must not reach visitors.
+  // Deliberate 4xx errors keep their message; the details go to the server log only.
+  if (status >= 500) {
+    console.error("bff_internal_error", { request_id: requestId, name: (error as { name?: string } | null)?.name, message: known.message })
+    return json({ message: "The service is temporarily unavailable. Please try again in a moment.", code: "BFF_INTERNAL_ERROR", ...(requestId ? { request_id: requestId } : {}) }, status, headers, requestId)
+  }
+  return json(body, status, headers, requestId)
 }
 /**
  * Stage 11: the visitor address as the hosting platform reports it (Vercel sets

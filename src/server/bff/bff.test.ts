@@ -490,3 +490,18 @@ test("a server older than the screen explains itself instead of 'API route not f
   const missing = await errorResponse(new ApiError("Student record not found in database.", { status: 404 })).json() as { message?: string }
   assert.equal(missing.message, "Student record not found in database.", "real not-found answers are kept")
 })
+
+test("unexpected server faults never show their internal message to visitors", async () => {
+  const original = console.error
+  console.error = () => {}
+  try {
+    const response = errorResponse(new Error("NOAUTH Authentication required. See https://upstash.com/docs/redis/troubleshooting/no_auth"))
+    const body = await response.json() as { message?: string; code?: string }
+    assert.equal(response.status, 500)
+    assert.equal(body.code, "BFF_INTERNAL_ERROR")
+    assert.ok(!/NOAUTH|upstash/i.test(String(body.message)))
+  } finally { console.error = original }
+  // Deliberate client errors keep their message.
+  const invalid = await errorResponse(Object.assign(new Error("Identifier, password and portal are required."), { status: 400, code: "VALIDATION_ERROR" })).json() as { message?: string }
+  assert.equal(invalid.message, "Identifier, password and portal are required.")
+})
