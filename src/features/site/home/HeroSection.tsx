@@ -166,7 +166,7 @@ export function HeroSection() {
             </p>
 
             <div className="flex flex-wrap gap-4 mb-8">
-              <RoundBtn href="/admissions">Explore Our School ✨</RoundBtn>
+              <RoundBtn href="/admissions#apply">Apply for Admission 🎓</RoundBtn>
               <RoundBtn href="/cbt" primary={false}>
                 Start CBT Exam →
               </RoundBtn>
