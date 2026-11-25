@@ -1,3 +1,4 @@
+import { SessionEndedNotice } from "@/components/layout/SessionEndedNotice"
 import type { Metadata, Viewport } from "next"
 import "@/styles/globals.css"
 
@@ -42,7 +43,7 @@ export default function RootLayout({
         />
         <link rel="stylesheet" href={GOOGLE_FONTS_URL} />
       </head>
-      <body>{children}</body>
+      <body>{children}<SessionEndedNotice /></body>
     </html>
   )
 }

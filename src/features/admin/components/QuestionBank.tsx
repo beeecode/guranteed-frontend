@@ -17,6 +17,7 @@ import {
   CheckCircle2, X, FileText, ImagePlus, Download, BookOpen,
 } from "lucide-react"
 import { bffClient } from "@/lib/api/bffClient"
+import { ApiError } from "@/lib/api/core"
 import { MathText } from "@/components/exam/MathText"
 
 interface Subject { id: number; name: string }
@@ -71,6 +72,9 @@ export function QuestionBank() {
   const [busy, setBusy] = useState<number | null>(null)
   const [editing, setEditing] = useState<Question | "new" | null>(null)
   const [viewing, setViewing] = useState<Question | null>(null)
+  // Stage 11: multi-select delete (selection is per page; cleared when the list changes).
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showPassages, setShowPassages] = useState(false)
 
@@ -98,6 +102,7 @@ export function QuestionBank() {
     setLoading(true)
     try {
       setData(await bffClient.action<QuestionPage>("admin-questions-list", { params: { subjectId, page, limit: PAGE_SIZE, search } }))
+      setSelected(new Set())
       setError("")
     } catch (reason) { setError(errorText(reason, "Questions could not be loaded.")) }
     finally { setLoading(false) }
@@ -123,6 +128,28 @@ export function QuestionBank() {
     if (!name) return
     try { await bffClient.action("admin-subject-create", { payload: { name } }); await loadSubjects(name); setNotice(`Subject "${name}" created.`) }
     catch (reason) { setError(errorText(reason, "The subject could not be created.")) }
+  }
+
+  const toggleOne = (id: number) => setSelected((value) => { const next = new Set(value); if (next.has(id)) next.delete(id); else next.add(id); return next })
+
+  const deleteSelected = async () => {
+    const ids = [...selected]
+    if (!ids.length || !window.confirm(`Delete ${ids.length} selected question${ids.length === 1 ? "" : "s"}? This cannot be undone. Questions already used in exams students sat are always kept.`)) return
+    setBulkBusy(true); setError(""); setNotice("")
+    try {
+      let result: { deleted_count?: number; kept_ids?: number[] }
+      try {
+        result = await bffClient.action("admin-questions-bulk-delete", { payload: { ids } })
+      } catch (reason) {
+        if (!(reason instanceof ApiError && reason.code === "QUESTION_HISTORY_LOCKED")) throw reason
+        if (!window.confirm(`${reason.message}\n\nDelete the other selected questions and keep those?`)) return
+        result = await bffClient.action("admin-questions-bulk-delete", { payload: { ids, skip_used: true } })
+      }
+      const kept = result.kept_ids?.length ?? 0
+      setNotice(`${result.deleted_count ?? ids.length} question${(result.deleted_count ?? ids.length) === 1 ? "" : "s"} deleted.${kept ? ` ${kept} kept because students already answered ${kept === 1 ? "it" : "them"}.` : ""}`)
+      await load()
+    } catch (reason) { setError(errorText(reason, "The questions could not be deleted.")) }
+    finally { setBulkBusy(false) }
   }
 
   const remove = async (question: Question) => {
@@ -177,13 +204,32 @@ export function QuestionBank() {
       {error ? <div role="alert" className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"><AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> {error}</div> : null}
       {notice ? <div role="status" className="mb-4 flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"><CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" /> {notice}</div> : null}
 
-      {}
+      {selected.size > 0 ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[#E8D9CB] bg-white px-4 py-3 shadow-sm">
+          <span className="text-sm font-medium text-gray-800">{selected.size} selected</span>
+          <button onClick={() => void deleteSelected()} disabled={bulkBusy} className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+            {bulkBusy ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Delete selected
+          </button>
+          <button onClick={() => setSelected(new Set())} disabled={bulkBusy} className="text-sm text-gray-500 underline">Clear selection</button>
+        </div>
+      ) : null}
+
       <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-12">#</th>
+                <th className="pl-5 pr-2 py-4 w-10">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all questions on this page"
+                    checked={questions.length > 0 && questions.every((q) => selected.has(q.id))}
+                    onChange={(e) => setSelected(e.target.checked ? new Set(questions.map((q) => q.id)) : new Set())}
+                    disabled={!questions.length}
+                    className="w-4 h-4 accent-[#B22234] rounded"
+                  />
+                </th>
+                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-12">#</th>
                 <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Question</th>
                 <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Subject</th>
                 <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Topic</th>
@@ -195,12 +241,15 @@ export function QuestionBank() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading && questions.length === 0 ? (
-                <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-gray-500"><LoaderCircle className="mx-auto mb-2 w-6 h-6 animate-spin text-[#B22234]" /> Loading questions…</td></tr>
+                <tr><td colSpan={9} className="px-5 py-12 text-center text-sm text-gray-500"><LoaderCircle className="mx-auto mb-2 w-6 h-6 animate-spin text-[#B22234]" /> Loading questions…</td></tr>
               ) : questions.length === 0 ? (
-                <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-gray-500">{subjectId ? (search ? "No questions match this search." : "No questions in this subject yet. Use Import CSV or Add Question.") : "Create a subject first."}</td></tr>
+                <tr><td colSpan={9} className="px-5 py-12 text-center text-sm text-gray-500">{subjectId ? (search ? "No questions match this search." : "No questions in this subject yet. Use Import CSV or Add Question.") : "Create a subject first."}</td></tr>
               ) : questions.map((q) => (
-                <tr key={q.id} className={`hover:bg-[#F9F5F1] transition-colors ${loading ? "opacity-60" : ""}`}>
-                  <td className="px-5 py-4 text-xs text-gray-400 font-mono">{q.id}</td>
+                <tr key={q.id} className={`hover:bg-[#F9F5F1] transition-colors ${selected.has(q.id) ? "bg-[#FFF5F5]" : ""} ${loading ? "opacity-60" : ""}`}>
+                  <td className="pl-5 pr-2 py-4">
+                    <input type="checkbox" aria-label={`Select question ${q.id}`} checked={selected.has(q.id)} onChange={() => toggleOne(q.id)} className="w-4 h-4 accent-[#B22234] rounded" />
+                  </td>
+                  <td className="px-3 py-4 text-xs text-gray-400 font-mono">{q.id}</td>
                   <td className="px-4 py-4">
                     <p className="text-sm text-gray-900 line-clamp-2 max-w-md"><MathText text={q.question_text} /></p>
                     <div className="mt-1 flex flex-wrap gap-1">

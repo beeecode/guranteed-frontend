@@ -4,102 +4,19 @@
 
 import { useState } from "react"
 import { X, ZoomIn } from "lucide-react"
+import { ALL_SCHOOL_PHOTOS } from "@/features/site/schoolPhotos"
 
-const categories = [
-  "All",
-  "Academics",
-  "Sports",
-  "Events",
-  "Arts",
-  "Excursions",
-]
+/** The school's own photos (features/site/schoolPhotos.ts); categories follow the photos. */
+const images = ALL_SCHOOL_PHOTOS.map((photo, index) => ({
+  id: index + 1,
+  src: photo.src,
+  alt: photo.alt,
+  cat: photo.category,
+  title: photo.title,
+  size: photo.orientation === "portrait" ? "large" : "normal",
+}))
+const categories = ["All", ...Array.from(new Set(images.map((img) => img.cat)))]
 
-const images = [
-  {
-    id: 1,
-    src: "photo-1509062522246-3755977927d7",
-    cat: "Academics",
-    title: "Classroom Learning",
-    size: "large",
-  },
-  {
-    id: 2,
-    src: "photo-1574623452334-1e0ac2b3ccb4",
-    cat: "Academics",
-    title: "Science Laboratory",
-    size: "normal",
-  },
-  {
-    id: 3,
-    src: "photo-1558618666-fcd25c85cd64",
-    cat: "Sports",
-    title: "Sports Day Champions",
-    size: "normal",
-  },
-  {
-    id: 4,
-    src: "photo-1484820540004-14229fe36ca4",
-    cat: "Arts",
-    title: "Art Class Creations",
-    size: "large",
-  },
-  {
-    id: 5,
-    src: "photo-1605371924599-2d0365da1ae0",
-    cat: "Academics",
-    title: "Computer Lesson",
-    size: "normal",
-  },
-  {
-    id: 6,
-    src: "photo-1560439514-4e9645039924",
-    cat: "Events",
-    title: "Cultural Day Celebration",
-    size: "normal",
-  },
-  {
-    id: 7,
-    src: "photo-1577896851231-70ef18881754",
-    cat: "Academics",
-    title: "Teacher Interaction",
-    size: "normal",
-  },
-  {
-    id: 8,
-    src: "photo-1545987796-200677ee1011",
-    cat: "Arts",
-    title: "Music Performance",
-    size: "large",
-  },
-  {
-    id: 9,
-    src: "photo-1580582932707-520aed937b7b",
-    cat: "Events",
-    title: "Graduation Ceremony",
-    size: "normal",
-  },
-  {
-    id: 10,
-    src: "photo-1524178232363-1fb2b075b655",
-    cat: "Academics",
-    title: "Reading Programme",
-    size: "normal",
-  },
-  {
-    id: 11,
-    src: "photo-1571260899304-425eee4c7efc",
-    cat: "Academics",
-    title: "CBT Examination",
-    size: "normal",
-  },
-  {
-    id: 12,
-    src: "photo-1503676260728-1c00da094a0b",
-    cat: "Academics",
-    title: "Group Study",
-    size: "normal",
-  },
-]
 export function GalleryBrowser() {
   const [activeCategory, setActiveCategory] = useState("All")
   const [lightbox, setLightbox] = useState<number | null>(null)
@@ -161,10 +78,8 @@ export function GalleryBrowser() {
                   }}
                 />
                 <img
-                  src={`https://images.unsplash.com/${img.src}?w=500&h=${
-                    img.size === "large" ? 600 : 400
-                  }&fit=crop&auto=format`}
-                  alt={img.title}
+                  src={img.src}
+                  alt={img.alt}
                   className="w-full object-cover"
                 />
                 <div
@@ -212,8 +127,8 @@ export function GalleryBrowser() {
                 }}
               />
               <img
-                src={`https://images.unsplash.com/${current.src}?w=1200&h=700&fit=crop&auto=format`}
-                alt={current.title}
+                src={current.src}
+                alt={current.alt}
                 className="w-full object-cover"
                 style={{ maxHeight: "75vh" }}
               />

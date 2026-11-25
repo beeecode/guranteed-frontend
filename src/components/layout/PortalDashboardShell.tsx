@@ -6,7 +6,6 @@ import { useState } from "react"
 import Link from "next/link"
 import { Bell, LogOut, Menu } from "lucide-react"
 import { Logo } from "@/components/ui/Logo"
-import { DemoModeNotice } from "@/components/ui/DemoModeNotice"
 
 export interface PortalNavItem {
   id: string
@@ -49,7 +48,7 @@ export function PortalDashboardShell({
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 bg-white shadow-xl transform transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0 lg:static lg:shadow-none border-r border-[rgba(217,198,178,0.3)] flex flex-col`}
+        } lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:flex-shrink-0 overflow-y-auto lg:shadow-none border-r border-[rgba(217,198,178,0.3)] flex flex-col`}
       >
         <div
           className="flex items-center gap-3 px-5 py-5"
@@ -179,9 +178,6 @@ export function PortalDashboardShell({
           </div>
         </header>
 
-        <div className="px-4 pt-4 sm:px-6">
-          <DemoModeNotice compact />
-        </div>
         {children}
       </div>
     </div>

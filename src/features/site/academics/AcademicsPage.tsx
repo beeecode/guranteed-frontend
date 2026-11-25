@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { GoldWave } from "@/components/ui/GoldWave"
 import { PageHero } from "../components/PageHero"
+import { SCHOOL_PHOTOS } from "@/features/site/schoolPhotos"
 
 const subjects = [
   {
@@ -243,8 +244,8 @@ export function AcademicsPage() {
                   }}
                 />
                 <img
-                  src="https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=600&h=400&fit=crop&auto=format"
-                  alt="CBT system"
+                  src={SCHOOL_PHOTOS.seniorStudents2.src}
+                  alt={SCHOOL_PHOTOS.seniorStudents2.alt}
                   className="w-full h-80 object-cover"
                 />
               </div>

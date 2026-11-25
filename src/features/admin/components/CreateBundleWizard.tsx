@@ -3,7 +3,7 @@
 /**
  * Create an exam bundle — the designed six-step wizard on live data (Stage 11).
  * A bundle groups existing exams (its subjects) for one class, in a fixed order, with
- * optional per-subject overrides and transition/break/late-start rules. "Save as draft"
+ * optional per-subject overrides and transition/break rules (no late-start rule since 2026-11-24). "Save as draft"
  * creates it; "Publish" also makes it visible to the class. Subjects must be ACTIVE exams
  * for students to start them; once in a bundle they are no longer offered as standalone
  * exams (server rule).
@@ -14,6 +14,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2, ChevronUp, ChevronDown, Check, LoaderCircle, AlertTriangle, X } from "lucide-react"
 import { bffClient } from "@/lib/api/bffClient"
+import { ApiError } from "@/lib/api/core"
 
 interface Level { id: number; name: string; code: string; is_active?: boolean }
 interface Exam { id: number; title: string; status: string; duration_mins: number; total_marks: number; class_level_id: number | null; random_draw_count: number | null; shuffle_options: boolean | null; subject?: { name?: string } | null }
@@ -106,8 +107,16 @@ function SubjectCard({ subject, index, total, onMove, onRemove, onEdit }: {
   )
 }
 
-function AddSubjectModal({ exams, chosen, classLevelId, onAdd, onClose }: { exams: Exam[]; chosen: number[]; classLevelId: string; onAdd: (exam: Exam) => void; onClose: () => void }) {
+/**
+ * A bundle subject is an EXAM (questions taken from the Question Bank), not a bank subject:
+ * a subject that only has questions does not appear until an exam is created for it.
+ * The modal says so, opens Examinations in a new tab (the wizard keeps its progress) and
+ * can reload the list afterwards.
+ */
+function AddSubjectModal({ exams, chosen, classLevelId, onAdd, onClose, onRefresh }: { exams: Exam[]; chosen: number[]; classLevelId: string; onAdd: (exam: Exam) => void; onClose: () => void; onRefresh: () => Promise<void> }) {
   const [showAll, setShowAll] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const refresh = async () => { setRefreshing(true); try { await onRefresh() } finally { setRefreshing(false) } }
   const available = exams.filter((exam) => !chosen.includes(exam.id) && exam.status !== "closed" && (showAll || !classLevelId || String(exam.class_level_id) === classLevelId))
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -117,8 +126,19 @@ function AddSubjectModal({ exams, chosen, classLevelId, onAdd, onClose }: { exam
           <button type="button" onClick={onClose} aria-label="Close" className="p-1 text-gray-400"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 overflow-y-auto space-y-2">
+          <div className="mb-3 p-3 text-xs leading-relaxed text-[#7A5C3A]" style={{ background: "#FEFCE8", borderRadius: 12, border: "1px solid rgba(217,198,178,0.5)" }}>
+            <strong className="text-[#1C0A04]">Don&apos;t see your subject?</strong> Each bundle subject is an <strong>exam</strong>. A subject that only has questions in the Question Bank appears here after you create an exam for it (choose the subject and its questions, or a random draw).
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a href="/admin/exams?new=1" target="_blank" rel="noopener" className="inline-flex items-center gap-1 px-3 py-1.5 font-semibold text-white" style={{ background: "#B22234", borderRadius: 999 }}>
+                <Plus className="w-3.5 h-3.5" /> Create an exam (new tab)
+              </a>
+              <button type="button" onClick={() => void refresh()} disabled={refreshing} className="inline-flex items-center gap-1 px-3 py-1.5 font-semibold text-[#B22234] disabled:opacity-60" style={{ border: "1.5px solid rgba(178,34,52,0.4)", borderRadius: 999 }}>
+                {refreshing ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : null} Refresh list
+              </button>
+            </div>
+          </div>
           <label className="flex items-center gap-2 text-xs text-[#7A5C3A] mb-2"><input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} className="accent-[#B22234]" /> Show exams of other classes too</label>
-          {available.length === 0 ? <p className="text-sm text-[#B8967A] text-center py-8">No more exams for this class. Create exams under Examinations first.</p> : available.map((exam) => (
+          {available.length === 0 ? <p className="text-sm text-[#B8967A] text-center py-8">No more exams {showAll ? "" : "for this class "}yet. Create one with the button above, then press Refresh list.</p> : available.map((exam) => (
             <button key={exam.id} type="button" onClick={() => onAdd(exam)} className="w-full flex items-center justify-between gap-3 p-3 text-left hover:bg-[#F9F5F1] transition-colors" style={{ borderRadius: 12, border: "1.5px solid rgba(217,198,178,0.4)" }}>
               <div className="min-w-0">
                 <div className="font-semibold text-[#1C0A04] text-sm truncate">{exam.subject?.name ?? "Subject"} — {exam.title}</div>
@@ -141,12 +161,19 @@ export function CreateBundleWizard() {
   const [studentCount, setStudentCount] = useState<number | null>(null)
   const [showAddSubject, setShowAddSubject] = useState(false)
   const [saving, setSaving] = useState<"draft" | "publish" | null>(null)
+  // The bundle this wizard already created (a retry finishes it instead of creating another).
+  const [savedBundleId, setSavedBundleId] = useState<number | null>(null)
   const [error, setError] = useState("")
   const [info, setInfo] = useState({ name: "", classLevelId: "", session: "", term: "First Term", description: "", startDate: "", startTime: "09:00", endDate: "", endTime: "16:00" })
   const [subjects, setSubjects] = useState<SubjectEntry[]>([])
   const [transitions, setTransitions] = useState({ mode: "manual" as "manual" | "automatic", autoCountdown: 10, breakMode: "none" as "none" | "optional" | "timed", breakDuration: 5, allowSkipBreak: true, autoStartAfterBreak: false })
-  const [rules, setRules] = useState({ canReturnToCompleted: false, resumeAfterLoss: true, requireSameDevice: false, allowLateStart: true, lateStartWindow: 30, autoSubmitFinal: true })
+  // No late-start rule (owner decision 2026-11-24): students may start any time while the bundle is open.
+  const [rules, setRules] = useState({ canReturnToCompleted: false, resumeAfterLoss: true, requireSameDevice: false, autoSubmitFinal: true })
 
+  const loadExams = async () => {
+    try { setExams((await bffClient.action<{ exams?: Exam[] }>("admin-exams-list")).exams ?? []) }
+    catch { setError("Exams could not be loaded.") }
+  }
   useEffect(() => {
     void bffClient.action<{ levels?: Level[] }>("admin-class-levels").then((value) => setLevels((value.levels ?? []).filter((level) => level.is_active !== false))).catch(() => setError("Classes could not be loaded."))
     void bffClient.action<{ exams?: Exam[] }>("admin-exams-list").then((value) => setExams(value.exams ?? [])).catch(() => setError("Exams could not be loaded."))
@@ -212,11 +239,24 @@ export function CreateBundleWizard() {
     return ""
   })()
 
+  /**
+   * Stage 11: create and publish are two requests. If publishing fails (or the create answer
+   * is lost), a retry must finish the SAME bundle, never create a second one (seen on
+   * staging: a draft left behind plus a duplicate). The created id is remembered; when the
+   * create answer timed out, the newest bundle with this name created in the last 5 minutes
+   * is adopted.
+   */
+  const findJustCreated = async (name: string) => {
+    const list = await bffClient.action<{ bundles?: Array<{ id: number; session_name: string; status: string; created_at?: string }> }>("admin-bundles-list")
+    const recent = (list.bundles ?? []).filter((bundle) => bundle.session_name === name && bundle.status === "draft" && Date.now() - Date.parse(bundle.created_at ?? "") < 5 * 60_000)
+    return recent.sort((a, b) => b.id - a.id)[0]?.id ?? null
+  }
+
   const save = async (publish: boolean) => {
     setSaving(publish ? "publish" : "draft"); setError("")
+    let stage: "create" | "publish" = "create"
     try {
-      const created = await bffClient.action<{ bundle: { id: number } }>("admin-bundle-create", {
-        payload: {
+      const payload = {
           session_name: info.name.trim(), description: info.description.trim() || null, academic_session: info.session.trim() || null, term: info.term || null,
           class_level_id: Number(info.classLevelId), class_section_id: null,
           starts_at: startsAt ? startsAt.toISOString() : null, ends_at: endsAt ? endsAt.toISOString() : null,
@@ -224,17 +264,38 @@ export function CreateBundleWizard() {
           break_mode: transitions.breakMode, break_duration_mins: transitions.breakMode === "none" ? 0 : transitions.breakDuration,
           allow_skip_break: transitions.allowSkipBreak, auto_start_after_break: transitions.autoStartAfterBreak,
           can_return_to_completed: rules.canReturnToCompleted, resume_after_disconnect: rules.resumeAfterLoss, require_same_device: rules.requireSameDevice,
-          allow_late_start: rules.allowLateStart, late_start_window_mins: rules.lateStartWindow, auto_submit_final: rules.autoSubmitFinal,
+          allow_late_start: true, late_start_window_mins: 0, auto_submit_final: rules.autoSubmitFinal,
           subjects: subjects.map((s) => ({
             exam_id: s.examId, duration_override: s.duration, total_marks_override: s.totalMarks || null, pass_mark: s.passMark,
             random_draw_count_override: s.randomDraw ? Number(s.randomDraw) : null, shuffle_options_override: s.randomizeOptions,
             auto_submit_on_timeout: s.autoSubmit, instructions: s.instructions.trim() || null,
           })),
-        },
-      })
-      if (publish) await bffClient.action("admin-bundle-publish", { params: { bundleId: created.bundle.id } })
+      }
+      let bundleId = savedBundleId
+      if (bundleId) {
+        await bffClient.action("admin-bundle-update", { params: { bundleId }, payload })
+      } else {
+        try {
+          const created = await bffClient.action<{ bundle: { id: number } }>("admin-bundle-create", { payload })
+          bundleId = created.bundle.id
+        } catch (reason) {
+          const timedOut = reason instanceof ApiError && reason.code === "BACKEND_TIMEOUT"
+          const adopted = timedOut ? await findJustCreated(payload.session_name).catch(() => null) : null
+          if (!adopted) throw reason
+          bundleId = adopted
+        }
+        setSavedBundleId(bundleId)
+      }
+      stage = "publish"
+      if (publish) await bffClient.action("admin-bundle-publish", { params: { bundleId } })
       router.push("/admin/bundles")
-    } catch (reason) { setError(errorText(reason, "The bundle could not be saved.")); setSaving(null) }
+    } catch (reason) {
+      const message = errorText(reason, "The bundle could not be saved.")
+      setError(stage === "publish" || savedBundleId
+        ? `The bundle was saved as a draft, but publishing did not finish: ${message} Press Publish again — it will not create a second bundle.`
+        : message)
+      setSaving(null)
+    }
   }
 
   return (
@@ -354,12 +415,6 @@ export function CreateBundleWizard() {
             {toggleRow("Allow returning to completed subjects", rules.canReturnToCompleted, (v) => setRules({ ...rules, canReturnToCompleted: v }))}
             {toggleRow("Resume after a lost connection", rules.resumeAfterLoss, (v) => setRules({ ...rules, resumeAfterLoss: v }), "Students continue where they stopped after a crash or reload (recommended).")}
             {toggleRow("Require the same device", rules.requireSameDevice, (v) => setRules({ ...rules, requireSameDevice: v }))}
-            {toggleRow("Allow late start", rules.allowLateStart, (v) => setRules({ ...rules, allowLateStart: v }), "Students can still start after the opening time, within the window below.")}
-            {rules.allowLateStart ? (
-              <div className="py-3"><label className={labelClass}>Late-start window (minutes after opening)</label><input type="number" min={0} max={1440} value={rules.lateStartWindow} onChange={(e) => setRules({ ...rules, lateStartWindow: Number(e.target.value) })} className={inputClass} style={inputStyle} /></div>
-            ) : (
-              <div className="my-3 flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800"><AlertTriangle className="w-4 h-4 shrink-0" /> With late start off and an opening time set, nobody can start after the exact opening time. Keep it on unless every student starts at once.</div>
-            )}
             {toggleRow("Auto-submit the final subject at time-out", rules.autoSubmitFinal, (v) => setRules({ ...rules, autoSubmitFinal: v }))}
           </div>
         )}
@@ -389,8 +444,8 @@ export function CreateBundleWizard() {
             </div>
             <div className="space-y-1 text-sm text-[#1C0A04] mb-4">
               <div><span className="text-[#7A5C3A]">Name:</span> {info.name}</div>
-              <div><span className="text-[#7A5C3A]">Opens:</span> {startsAt ? startsAt.toLocaleString() : "when published"} · <span className="text-[#7A5C3A]">Closes:</span> {endsAt ? endsAt.toLocaleString() : "when you close it"}</div>
-              <div><span className="text-[#7A5C3A]">Breaks:</span> {transitions.breakMode === "none" ? "none" : `${transitions.breakMode}, ${transitions.breakDuration} min`} · <span className="text-[#7A5C3A]">Late start:</span> {rules.allowLateStart ? `${rules.lateStartWindow} min` : "off"}</div>
+              <div><span className="text-[#7A5C3A]">Opens:</span> {startsAt ? startsAt.toLocaleString() : "when published"} · <span className="text-[#7A5C3A]">Closes:</span> {endsAt ? endsAt.toLocaleString() : "when you close it"} <span className="text-[#7A5C3A]">(students can start any time in between)</span></div>
+              <div><span className="text-[#7A5C3A]">Breaks:</span> {transitions.breakMode === "none" ? "none" : `${transitions.breakMode}, ${transitions.breakDuration} min`}</div>
             </div>
             <ol className="space-y-2 mb-4">
               {subjects.map((s, i) => (
@@ -429,7 +484,7 @@ export function CreateBundleWizard() {
         </div>
       </div>
 
-      {showAddSubject && <AddSubjectModal exams={exams} chosen={subjects.map((s) => s.examId)} classLevelId={info.classLevelId} onAdd={addSubject} onClose={() => setShowAddSubject(false)} />}
+      {showAddSubject && <AddSubjectModal exams={exams} chosen={subjects.map((s) => s.examId)} classLevelId={info.classLevelId} onAdd={addSubject} onClose={() => setShowAddSubject(false)} onRefresh={loadExams} />}
     </>
   )
 }

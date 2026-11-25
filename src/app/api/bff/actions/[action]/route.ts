@@ -6,6 +6,10 @@ import { requestIdFor } from "@/server/bff/requestId"
 import { isDownloadOperation, isUploadOperation, prepareUpload, resolveDownload, safeDownloadHeaders } from "@/server/bff/fileTransport"
 
 export const dynamic = "force-dynamic"
+// Closing grades every attempt still open (Stage 11 §8); give these up to a minute.
+const LONG_ACTIONS = new Set(["admin-bundle-close", "admin-exam-update"])
+// Exam-time traffic stays on the short limit: a hung save is retried sooner by the client.
+const FAST_ACTIONS = new Set(["student-answers-save", "student-heartbeat", "student-security-event"])
 export async function POST(request: Request, context: { params: Promise<{ action: string }> }) {
   const requestId = requestIdFor(request)
   try {
@@ -40,6 +44,7 @@ export async function POST(request: Request, context: { params: Promise<{ action
       method: resolved.method,
       body: resolved.body,
       token,
+      timeoutMs: LONG_ACTIONS.has(action) ? 60_000 : FAST_ACTIONS.has(action) ? 10_000 : undefined,
     }))
     return json(result, 200, undefined, requestId)
   } catch (error) { return errorResponse(error, undefined, requestId) }

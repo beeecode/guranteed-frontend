@@ -6,7 +6,8 @@ import { resolveAction } from "./actions.ts"
 import { createAuthService } from "./authService.ts"
 import { createBackendGateway, type BackendGateway } from "./backend.ts"
 import { readBffConfig } from "./config.ts"
-import { visitorAddress } from "./http.ts"
+import { errorResponse, visitorAddress } from "./http.ts"
+import { returnPath } from "../../features/auth/returnPath.ts"
 import { forwardWithSession } from "./forwardWithSession.ts"
 import { assertCsrf, assertSameOrigin } from "./csrf.ts"
 import { loadAdminDashboard, loadStudentDashboard } from "./dashboardService.ts"
@@ -149,7 +150,9 @@ test("route protection is role-aware and unsupported parent routes close in real
   assert.equal(protectPath("/student/exam/42", "integration", session("student")).action, "allow")
   assert.equal(protectPath("/student/exam/42/instructions", "integration", session("student")).action, "allow")
   assert.equal(protectPath("/student/exam/42/submitted", "integration", session("student")).action, "allow")
-  assert.deepEqual(protectPath("/student/results", "integration", session("student")), { action: "redirect", destination: "/student/dashboard" })
+  assert.equal(protectPath("/student/results", "integration", session("student")).action, "allow")
+  assert.equal(protectPath("/student/performance", "integration", session("student")).action, "allow")
+  assert.deepEqual(protectPath("/student/settings", "integration", session("student")), { action: "redirect", destination: "/student/dashboard" })
   assert.equal(protectPath("/admin/questions", "integration", session("admin")).action, "allow")
   assert.deepEqual(protectPath("/admin/settings", "integration", session("admin")), { action: "redirect", destination: "/admin/dashboard" })
 })
@@ -426,4 +429,64 @@ test("the backend gateway forwards the visitor address only together with the sh
   assert.equal(visitorAddress(new Request("http://x", { headers: { "x-forwarded-for": "41.9.9.9, 10.0.0.1" } })), "41.9.9.9")
   assert.equal(visitorAddress(new Request("http://x", { headers: { "x-forwarded-for": "evil<script>" } })), null)
   assert.equal(readBffConfig({ GFMS_BFF_MODE: "integration", GFMS_INTEGRATION_AUTHORIZATION: "ISOLATED_NON_PRODUCTION_SUPABASE", GFMS_INTEGRATION_ENVIRONMENT_ID: "00000000-0000-4000-8000-000000000000", GFMS_BACKEND_URL: "http://127.0.0.1:5107", GFMS_SESSION_SECRET: "x".repeat(40), GFMS_SESSION_STORE: "memory", GFMS_ALLOW_LOCAL_SESSION_STORE: "true", GFMS_BACKEND_SHARED_SECRET: "short" }).backendSharedSecret, undefined)
+})
+
+test("validation details reach the browser so forms can name the wrong field; other errors stay generic", async () => {
+  const invalid = new ApiError("Please check the highlighted fields.", { status: 400, code: "VALIDATION_ERROR", details: [
+    { field: "date_of_birth", issue: "enter the child's date of birth" },
+    { field: "phone", issue: "enter a valid phone number", stack: "secret" },
+    { nope: true },
+  ] })
+  const body = await errorResponse(invalid).json() as { details?: unknown }
+  assert.deepEqual(body.details, [
+    { field: "date_of_birth", issue: "enter the child's date of birth" },
+    { field: "phone", issue: "enter a valid phone number" },
+  ])
+  const server = await errorResponse(new ApiError("Down", { status: 500, details: [{ field: "x", issue: "internal" }] })).json() as { details?: unknown }
+  assert.equal(server.details, undefined)
+})
+
+test("backend failures: unreachable vs too slow get different advice; writes wait longer than reads", async () => {
+  const signals: Array<{ method: string; aborted: boolean }> = []
+  const slow = createBackendGateway("http://127.0.0.1:5107", async (_url, init) => {
+    signals.push({ method: String(init?.method), aborted: Boolean(init?.signal?.aborted) })
+    const error = new Error("timed out"); error.name = "TimeoutError"; throw error
+  })
+  await assert.rejects(slow.request("/api/admin/students/x/reset-password", { method: "PATCH" }),
+    (error: unknown) => error instanceof ApiError && error.status === 504 && error.code === "BACKEND_TIMEOUT" && /may still complete/.test(error.message))
+  const refused = createBackendGateway("http://127.0.0.1:5107", async () => { throw new TypeError("fetch failed") })
+  await assert.rejects(refused.request("/api/admin/students"),
+    (error: unknown) => error instanceof ApiError && error.status === 503 && error.code === "BACKEND_UNREACHABLE")
+
+  // The timeout signal chosen per request: 10 s for reads, 30 s for writes, explicit override wins.
+  const seen: number[] = []
+  const realTimeout = AbortSignal.timeout
+  AbortSignal.timeout = ((ms: number) => { seen.push(ms); return realTimeout.call(AbortSignal, ms) }) as typeof AbortSignal.timeout
+  try {
+    const ok = createBackendGateway("http://127.0.0.1:5107", async () => Response.json({ ok: true }))
+    await ok.request("/api/admin/students")
+    await ok.request("/api/admin/students", { method: "POST", body: {} })
+    await ok.request("/api/admin/bundles/1/close", { method: "PATCH", timeoutMs: 60_000 })
+  } finally { AbortSignal.timeout = realTimeout }
+  assert.deepEqual(seen, [10_000, 30_000, 60_000])
+})
+
+test("sign in again returns to the same page, only inside the same portal", () => {
+  assert.equal(returnPath("/student", "/student/dashboard", "?next=%2Fstudent%2Fbundle%2F5%2Fexam"), "/student/bundle/5/exam")
+  assert.equal(returnPath("/student", "/student/dashboard", "?next=%2Fstudent%2Fexam%2F7%3Fattempt%3D12"), "/student/exam/7?attempt=12")
+  for (const next of ["https://evil.example", "//evil.example/student/x", "/admin/students", "/student/login", "/student\\..\\x", "/student/<script>"]) {
+    assert.equal(returnPath("/student", "/student/dashboard", `?next=${encodeURIComponent(next)}`), "/student/dashboard", next)
+  }
+  assert.equal(returnPath("/admin", "/admin/dashboard", "?next=%2Fadmin%2Fstudents"), "/admin/students")
+  assert.equal(returnPath("/admin", "/admin/dashboard", ""), "/admin/dashboard")
+})
+
+test("a server older than the screen explains itself instead of 'API route not found'", async () => {
+  const outdated = errorResponse(new ApiError("API route not found.", { status: 404, code: "NOT_FOUND" }))
+  const body = await outdated.json() as { code?: string; message?: string }
+  assert.equal(outdated.status, 404)
+  assert.equal(body.code, "SERVER_OUTDATED")
+  assert.match(String(body.message), /restarted or updated/)
+  const missing = await errorResponse(new ApiError("Student record not found in database.", { status: 404 })).json() as { message?: string }
+  assert.equal(missing.message, "Student record not found in database.", "real not-found answers are kept")
 })

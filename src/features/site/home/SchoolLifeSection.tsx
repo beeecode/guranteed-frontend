@@ -47,8 +47,8 @@ export function SchoolLifeSection() {
                 style={{ transform: "rotate(-0.5deg)" }}
               />
               <img
-                src={`https://images.unsplash.com/${item.src}?w=300&h=230&fit=crop&auto=format`}
-                alt={item.caption}
+                src={item.src}
+                alt={item.alt}
                 className="w-full object-cover"
                 style={{ height: i === 2 ? 180 : 148 }}
               />

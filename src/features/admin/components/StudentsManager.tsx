@@ -11,10 +11,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
-  Search, Plus, Download, Upload, ChevronLeft, ChevronRight, Trash2, KeyRound, Power,
+  Search, Plus, Download, Upload, ChevronLeft, ChevronRight, Trash2, KeyRound, Power, Eye,
   LoaderCircle, Copy, Printer, X, AlertTriangle, CheckCircle2,
 } from "lucide-react"
 import { bffClient } from "@/lib/api/bffClient"
+import { StudentDetailsModal } from "./StudentDetailsModal"
 
 interface Level { id: number; name: string; code: string; is_active?: boolean }
 interface Student {
@@ -64,6 +65,7 @@ export function StudentsManager() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [credentials, setCredentials] = useState<{ title: string; items: Credential[] } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [viewingId, setViewingId] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -120,7 +122,7 @@ export function StudentsManager() {
     })
   }
 
-  const resetPassword = (student: Student) => {
+  const resetPassword = (student: Pick<Student, "id" | "full_name" | "student_id">) => {
     if (!window.confirm(`Generate a new password for ${student.full_name}? The old password stops working.`)) return
     void run(`reset-${student.id}`, async () => {
       const result = await bffClient.action<{ temp_password: string }>("admin-student-reset-password", { params: { studentId: student.id } })
@@ -266,7 +268,7 @@ export function StudentsManager() {
                       <div className="w-9 h-9 rounded-xl bg-[#B22234] flex items-center justify-center font-heading font-600 text-white text-xs flex-shrink-0">
                         {initials(student.full_name)}
                       </div>
-                      <span className="font-medium text-gray-900 text-sm">{student.full_name}</span>
+                      <button type="button" onClick={() => setViewingId(student.id)} className="font-medium text-gray-900 text-sm text-left hover:text-[#B22234] hover:underline underline-offset-2">{student.full_name}</button>
                     </div>
                   </td>
                   <td className="px-4 py-4 text-sm text-gray-500 font-mono text-xs">{student.student_id}</td>
@@ -283,6 +285,13 @@ export function StudentsManager() {
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => setViewingId(student.id)}
+                        className="p-2 rounded-lg text-gray-400 hover:text-[#B22234] hover:bg-red-50 transition-colors"
+                        title="View details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => void setStatus([student.id], !student.is_active)}
                         disabled={busy !== null}
@@ -341,6 +350,16 @@ export function StudentsManager() {
           onCreated={(credential) => { setShowAddModal(false); setCredentials({ title: "Student account created", items: [credential] }); void load() }}
         />
       )}
+
+      {viewingId ? (
+        <StudentDetailsModal
+          studentId={viewingId}
+          levels={levels}
+          onClose={() => setViewingId(null)}
+          onChanged={() => void load()}
+          onNewPassword={resetPassword}
+        />
+      ) : null}
 
       {credentials && <CredentialsModal title={credentials.title} items={credentials.items} onClose={() => setCredentials(null)} />}
     </>

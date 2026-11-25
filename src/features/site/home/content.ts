@@ -84,30 +84,11 @@ export const testimonials = [
   },
 ]
 
+/** The school's own photos (features/site/schoolPhotos.ts). */
 export const galleryItems = [
-  {
-    src: "photo-1509062522246-3755977927d7",
-    caption: "Learning Together 📚",
-    rotate: -2,
-  },
-  {
-    src: "photo-1574623452334-1e0ac2b3ccb4",
-    caption: "Science Fun 🔬",
-    rotate: 1.5,
-  },
-  {
-    src: "photo-1484820540004-14229fe36ca4",
-    caption: "Art Class 🎨",
-    rotate: -1,
-  },
-  {
-    src: "photo-1560439514-4e9645039924",
-    caption: "Cultural Day 🎉",
-    rotate: 2,
-  },
-  {
-    src: "photo-1577896851231-70ef18881754",
-    caption: "Great Teachers ❤️",
-    rotate: -1.5,
-  },
+  { src: "/images/school/senior-students-2.jpg", caption: "Proud in uniform 👔", alt: "A group of senior students in uniform", rotate: -2 },
+  { src: "/images/school/students-in-sweaters.jpg", caption: "Ready to learn 📚", alt: "Students wearing the school sweater", rotate: 1.5 },
+  { src: "/images/school/students-front-of-school-2.jpg", caption: "Our school family 🏫", alt: "Students in uniform in front of the school's welcome sign", rotate: -1 },
+  { src: "/images/school/senior-students.jpg", caption: "Senior students 🎓", alt: "Senior students in school uniform in the courtyard", rotate: 2 },
+  { src: "/images/school/students-in-sweaters-2.jpg", caption: "Friends at GFMS 🤝", alt: "Students in school sweaters in the courtyard", rotate: -1.5 },
 ]

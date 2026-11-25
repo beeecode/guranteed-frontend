@@ -13,7 +13,7 @@ export function protectPath(path: string, mode: BffMode, session: BffSession | n
   if (!role || isLogin) return { action: "allow" }
   if (mode === "disabled" || !session) return { action: "redirect", destination: `/${role}/login` }
   if (session.profile.role !== role) return { action: "redirect", destination: `/${session.profile.role}/dashboard` }
-  const integratedPage = path === "/student/dashboard"
+  const integratedPage = ["/student/dashboard", "/student/results", "/student/performance"].includes(path)
     || path === "/admin/dashboard"
     || ["/admin/students", "/admin/classes", "/admin/admissions", "/admin/questions", "/admin/exams", "/admin/results", "/admin/bundles", "/admin/bundles/create"].includes(path)
     || /^\/admin\/bundles\/[0-9]+\/monitor$/.test(path)

@@ -1,12 +1,10 @@
 import Link from "next/link"
 import { Home } from "lucide-react"
 import { StudentPageHeader } from "@/components/layout/StudentPageHeader"
-import { sum } from "@/lib/format"
 import type { ExamBundle } from "@/types/exam"
-import { summarizeBundleResults } from "../lib/results"
 import { SubjectResultsAccordion, type SubjectResult } from "./SubjectResultsAccordion"
 
-/** Stage 11: server-released results. When given, nothing is computed from fixtures. */
+/** Stage 11: server-released results; nothing is computed in the browser. */
 export interface LiveBundleResultsData {
   subjectResults: SubjectResult[]
   avgPct: number | null
@@ -24,18 +22,14 @@ export function BundleResults({
 }: {
   bundle: ExamBundle
   backHref?: string
-  live?: LiveBundleResultsData
+  live: LiveBundleResultsData
 }) {
-  const summary = live ? null : summarizeBundleResults(bundle)
-  const subjectResults = live ? live.subjectResults : summary!.subjectResults
-  const avgLabel = live ? (live.avgPct === null ? "—" : `${live.avgPct}%`) : `${summary!.avgPct}%`
+  const subjectResults = live.subjectResults
+  const avgLabel = live.avgPct === null ? "—" : `${live.avgPct}%`
   const scored = subjectResults.filter((result) => !result.live?.pending)
   const bestSubject = scored.length ? scored.reduce((best, r) => (r.pct > best.pct ? r : best), scored[0]) : null
   // Live: only a grade the server issued (no grade scale configured => no letter grade).
-  const headline = live
-    ? { grade: live.grade ?? "", emoji: live.pending ? "⏳" : "🎓", label: live.pending ? "Some answers are still being marked" : live.grade ? "Overall Grade" : "Overall Score" }
-    : { grade: summary!.overall.grade, emoji: summary!.overall.emoji, label: "Overall Grade" }
-  const totalAnswered = sum(bundle.subjects, (s) => s.totalQuestions)
+  const headline = { grade: live.grade ?? "", emoji: live.pending ? "⏳" : "🎓", label: live.pending ? "Some answers are still being marked" : live.grade ? "Overall Grade" : "Overall Score" }
 
   const quickStats = [
     { label: "Overall Avg", value: avgLabel, emoji: "📊" },
@@ -44,9 +38,7 @@ export function BundleResults({
       value: bestSubject ? bestSubject.name.split(" ")[0] : "—",
       emoji: "🏆",
     },
-    live
-      ? { label: "Subjects Passed", value: live.passMarkCount ? `${live.passedCount}/${live.passMarkCount}` : "—", emoji: "✅" }
-      : { label: "Questions Done", value: `${totalAnswered}/${totalAnswered}`, emoji: "✅" },
+    { label: "Subjects Passed", value: live.passMarkCount ? `${live.passedCount}/${live.passMarkCount}` : "—", emoji: "✅" },
   ]
 
   return (

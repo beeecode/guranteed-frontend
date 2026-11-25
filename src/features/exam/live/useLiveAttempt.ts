@@ -3,7 +3,7 @@
 /**
  * Server-authoritative state for ONE exam attempt (a standalone exam or one bundle
  * subject). Stage 11: this holds the exam-day safety logic that used to live inside the
- * plain IntegratedExamScreen, so the designed screens can be driven by real data:
+ * plain exam screen (now removed), so the designed screens can be driven by real data:
  *
  *  - one save loop per question; a stale acknowledgement never marks a newer answer
  *    saved (QuestionSaveRevision);
@@ -64,6 +64,7 @@ export function useLiveAttempt(attemptId: string, options: LiveAttemptOptions) {
   const mounted = useRef(true)
   const submittingRef = useRef(false)
   const expiryHandled = useRef(false)
+  const lastSubmitRetryable = useRef(false)
   const timingRef = useRef<{ timing: AttemptPayload["timing"] | null; offset: number }>({ timing: null, offset: 0 })
   const draftStore = useRef<UnsavedDraftStore | null>(null)
   const optionsRef = useRef(options)
@@ -155,8 +156,13 @@ export function useLiveAttempt(attemptId: string, options: LiveAttemptOptions) {
       submittingRef.current = false
       setSubmitting(false)
       if (isFinished(reason)) { finish(null); return true }
-      setNotice(reason instanceof ApiError && reason.status === 503
-        ? "Submission could not be confirmed because the connection dropped. Check your connection and press Submit again; a repeat is safe."
+      const status = reason instanceof ApiError ? reason.status : undefined
+      lastSubmitRetryable.current = isRetryableSaveError(status)
+      const connection = status === undefined || status === 0 || status === 503 || status === 504
+      setNotice(connection
+        ? automatic
+          ? "Time is up. Your answers are being submitted, but the connection is unstable — retrying automatically. Keep this page open."
+          : "Submission could not be confirmed because the connection dropped. Check your connection and press Submit again; a repeat is safe."
         : reason instanceof Error ? reason.message : "Submission could not be confirmed.")
       if (automatic) setLocked(true)
       return false
@@ -188,7 +194,13 @@ export function useLiveAttempt(attemptId: string, options: LiveAttemptOptions) {
       return current ? current.saveGraceEndsAt - skew - 5_000 : Date.now()
     }
     while (mounted.current && pendingSaves() && inFlight.current.size > 0 && Date.now() < deadline()) await sleep(500)
-    if (mounted.current) await performSubmit(true)
+    // The screen is locked at time-out, so the student cannot press Submit: retry by itself
+    // on connection failures (a repeated submit is safe on the server) for up to 2 minutes.
+    for (let tries = 0; mounted.current && tries < 24; tries += 1) {
+      if (await performSubmit(true)) return
+      if (!lastSubmitRetryable.current) return
+      await sleep(5_000)
+    }
   }, [performSubmit, pendingSaves])
 
   useEffect(() => {
