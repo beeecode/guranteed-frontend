@@ -21,22 +21,24 @@ export function ExamAgreement({ onStart, starting = false, startLabel = "Let's G
     <>
       {}
       <div className="bg-white mb-6 p-6" style={{ borderRadius: 24 }}>
-        <label className="flex items-start gap-4 cursor-pointer">
+        {/* The <label> alone toggles the checkbox. (Extra onClick handlers on the box and
+            the text used to toggle it a second time, so a click never changed anything.) */}
+        <label className="flex items-start gap-4 cursor-pointer select-none">
           <div className="relative flex-shrink-0 mt-0.5">
             <input
               type="checkbox"
               checked={agreed}
               onChange={(e) => setAgreed(e.target.checked)}
-              className="sr-only"
+              className="sr-only peer"
             />
             <div
-              className="w-6 h-6 flex items-center justify-center transition-all"
+              aria-hidden="true"
+              className="w-6 h-6 flex items-center justify-center transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-[#B22234] peer-focus-visible:ring-offset-2"
               style={{
                 background: agreed ? "#B22234" : "#fff",
                 border: `2.5px solid ${agreed ? "#B22234" : "#D9C6B2"}`,
                 borderRadius: 6,
               }}
-              onClick={() => setAgreed((v) => !v)}
             >
               {agreed && (
                 <span className="text-white text-sm font-bold">✓</span>
@@ -45,7 +47,6 @@ export function ExamAgreement({ onStart, starting = false, startLabel = "Let's G
           </div>
           <p
             className="text-[#1C0A04] text-sm leading-relaxed"
-            onClick={() => setAgreed((v) => !v)}
           >
             I have read and fully understood all the instructions above. I agree
             to follow the examination rules and submit my answers honestly and
