@@ -4,7 +4,7 @@ import { Logo } from "@/components/ui/Logo"
 import { portalLinks, siteNavLinks } from "./siteNavLinks"
 
 const contactLines = [
-  { icon: Phone, text: "+234 801 234 5678" },
+  { icon: Phone, text: "+2348060715577" },
   { icon: Mail, text: "info@gfms.edu.ng" },
   { icon: MapPin, text: "14 Learning Lane, Lagos State" },
 ]
