@@ -150,3 +150,5 @@
 src/assets/logo.png -filter -diff -merge binary
 # School photos are served at runtime from public/ - store directly in Git (see logo note above).
 public/images/school/*.jpg -filter -diff -merge binary
+# Next.js reads the favicon at build time - store directly in Git (see logo note above).
+src/app/favicon.ico -filter -diff -merge binary
